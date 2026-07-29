@@ -1,0 +1,76 @@
+name: CI
+
+# Doc-only changes skip this workflow entirely. Nothing below can be broken by
+# prose: type-check, lint, the build and the tests all read code. A skipped run
+# costs zero billed minutes, and doc-only PRs paying full price is a pure waste.
+#
+# gitleaks (security.yml) deliberately carries NO path filter — secrets land in
+# markdown too.
+#
+# Consequence: a doc-only PR shows green on PR hygiene + Security with CI absent.
+# That is expected and mergeable (docs/RUNBOOK.md "When something looks broken").
+# ci-docs.yml is this workflow's no-op twin: it runs on exactly the paths
+# ignored here and reports success under the same job name, so `checks` can be
+# a REQUIRED status check without doc-only PRs hanging forever. Keep the two
+# path lists exact inverses and the two job names identical.
+#
+# GitHub Actions' YAML parser does not support anchors, so the list is repeated.
+on:
+  pull_request:
+    paths-ignore:
+      - "docs/**"
+      # "**.md", not "**/*.md": this is GitHub's own documented root-inclusive
+      # form, and root-level AGENTS.md / README.md edits are a real PR category.
+      # Getting it wrong fails soft (docs keep billing minutes), so the
+      # unambiguous pattern wins.
+      - "**.md"
+      - ".claude/**"
+  push:
+    branches: [{{DEFAULT_BRANCH}}]
+    paths-ignore:
+      - "docs/**"
+      - "**.md"
+      - ".claude/**"
+
+concurrency:
+  group: ci-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  checks:
+    name: checks (format, type-check, lint, build, test)
+    runs-on: ubuntu-latest
+    # Insurance, not a target: GitHub's default is 360 min, so one hung test
+    # would burn a large slice of the monthly free-tier quota in one incident.
+    timeout-minutes: 15
+{{DB_SERVICE_BLOCK}}
+    steps:
+      - uses: actions/checkout@v7
+      # Before setup-node, so its `cache:` can find a corepack-managed pnpm/yarn
+      # on PATH (the version comes from package.json "packageManager"). A no-op
+      # for npm.
+      - run: corepack enable
+      - uses: actions/setup-node@v7
+        with:
+          node-version-file: .nvmrc
+          cache: {{PKG_MANAGER}}
+      - run: {{INSTALL_CMD}}
+      # The same three scripts .githooks/pre-push runs. Two gates checking
+      # different things is worse than one — the hook goes green on exactly what
+      # CI is about to reject, and the push it let through is already public.
+      # (The order differs from the hook's and may: format:check is first here
+      # because it is by far the cheapest, and nothing downstream depends on it.)
+      # Adoption (ADOPT.md) DELETES the steps this repo has no script for; a
+      # step left behind for a missing script is a guaranteed red run on the
+      # first PR.
+      - run: {{PKG_MANAGER}} run format:check
+      - run: {{PKG_MANAGER}} run type-check
+      - run: {{PKG_MANAGER}} run lint
+      # Build is a STEP, not its own job. A second runner bills its own spin-up
+      # plus GitHub's per-job minute rounding on every single run — ~2 billed
+      # minutes for ~40s of work. It sits here, before the test step, so a
+      # broken build fails cheap.
+      - name: Build
+{{BUILD_ENV_BLOCK}}
+        run: {{PKG_MANAGER}} run build
+      - run: {{TEST_CMD}}

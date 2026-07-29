@@ -1,0 +1,95 @@
+name: PR hygiene
+
+# Machine-enforces the PR-shape rules that prose kept failing to: the body
+# links its issue, the title is a conventional commit (it becomes the squash
+# title on the default branch), and the Docs section is filled.
+#
+# The original rule — every PR body links its issue, so the loop closes itself:
+# GitHub auto-closes an issue and cross-links the PR into its timeline on
+# squash-merge WHEN the body carries a closing keyword — that cross-link IS the
+# history the human never has to reconstruct. A prose rule alone gets skipped
+# (the human doesn't read diffs; CI green is the only machine guarantee), so
+# this gate makes a missing link fail red instead of shipping silently.
+#
+# Deliberately a SEPARATE workflow from ci.yml, not a job inside it:
+#   - it must re-run on `edited` (agent fixes the body without a new commit) —
+#     wiring that trigger into ci.yml would re-run the whole heavy suite on
+#     every body edit;
+#   - ci.yml is a magnet file; a standalone file avoids racing in-flight PRs
+#     that touch it (e.g. dependabot bumps to its actions).
+
+on:
+  pull_request:
+    types: [opened, edited, synchronize, reopened]
+
+jobs:
+  hygiene:
+    name: PR body & title hygiene
+    # Dependabot PRs carry no issue reference by design — exempt the bot rather
+    # than weakening the rule for humans. Keyed on the PR AUTHOR, not the event
+    # actor: this stays true even when a human clicks "Update branch" on a
+    # dependabot PR (which retriggers as the human). A skipped job reports
+    # neutral, not red, so these PRs stay mergeable.
+    if: github.event.pull_request.user.login != 'dependabot[bot]'
+    runs-on: ubuntu-latest
+    # Insurance against a hung job burning the free-tier quota; these are three
+    # greps against strings already in the event payload — seconds of work.
+    timeout-minutes: 5
+    steps:
+      - name: Require an issue reference in the PR body
+        env:
+          # Read via env, never interpolated into the script — the PR body is
+          # untrusted input.
+          PR_BODY: ${{ github.event.pull_request.body }}
+        run: |
+          if printf '%s' "$PR_BODY" | grep -qiE '(close[sd]?|fix(e[sd])?|resolve[sd]?) +#[0-9]+'; then
+            echo "PR closes an issue — it will auto-close and cross-link on squash-merge."
+            exit 0
+          fi
+          if printf '%s' "$PR_BODY" | grep -qiE 'refs? +#[0-9]+'; then
+            echo "PR references an issue without closing it (umbrella issue stays open)."
+            exit 0
+          fi
+          if printf '%s' "$PR_BODY" | grep -qiE 'no[ -]issue'; then
+            echo "PR explicitly declares no issue."
+            exit 0
+          fi
+          echo "::error::PR body must reference its issue. Use 'Closes #N' (auto-closes + cross-links on merge), 'Refs #N' (mention only, for umbrella issues), or 'No issue' for genuinely issueless work."
+          exit 1
+
+      # The PR title becomes the squash-commit title on the default branch
+      # (AGENTS.md "Getting to master") — nothing else enforces its format.
+      - name: Require a conventional-commit PR title
+        env:
+          # Same rule as PR_BODY: read via env, never interpolated.
+          PR_TITLE: ${{ github.event.pull_request.title }}
+        run: |
+          if printf '%s' "$PR_TITLE" | grep -qE '^(feat|fix|chore|docs|refactor|perf|test|ci|build|revert)(\([a-z0-9._/-]+\))?!?: .+'; then
+            echo "PR title is a conventional commit."
+            exit 0
+          fi
+          echo "::error::PR title must be a conventional commit (it becomes the squash-commit title), e.g. 'feat(feed): ...' or 'fix: ...'."
+          exit 1
+
+      # Doc drift is a bug: agents ship behavior changes and forget
+      # README/AGENTS.md/RUNBOOK. Prose rules get skipped — same failure mode
+      # as the issue-link rule above — so the Docs section is machine-required.
+      # The check forces the QUESTION to be answered ("which docs, or why
+      # none"); the reviewer verifies the answer is true (review-pr item 10).
+      - name: Require a filled Docs section
+        env:
+          PR_BODY: ${{ github.event.pull_request.body }}
+        run: |
+          # Form 1: "Docs: none — <reason>" (any dash; reason must carry ≥3
+          # word chars so the template's bare "Docs: none —" line fails).
+          if printf '%s' "$PR_BODY" | grep -qiE '^[[:space:]]*docs:[[:space:]]*none.*[[:alnum:]]{3}'; then
+            echo "PR declares no doc changes, with a reason."
+            exit 0
+          fi
+          # Form 2: at least one "* " bullet inside the "## Docs" section.
+          if printf '%s' "$PR_BODY" | awk '/^## Docs/{f=1;next} /^## /{f=0} f' | grep -qE '^[[:space:]]*\* [^[:space:]]'; then
+            echo "PR lists updated docs."
+            exit 0
+          fi
+          echo "::error::PR body must fill the '## Docs' section: either '* <file> — <what changed>' bullets, or 'Docs: none — <reason>'. If this PR adds anything the human runs or must remember, docs/RUNBOOK.md must be one of the bullets."
+          exit 1

@@ -1,0 +1,33 @@
+name: CI
+
+# The no-op twin of ci.yml, and the reason `checks` can be a REQUIRED status
+# check: a workflow skipped by its path filter reports nothing, and a required
+# check that never reports blocks the merge forever. This twin runs on exactly
+# the paths ci.yml ignores and reports success under the SAME job name —
+# GitHub's documented pattern for skipped-but-required checks.
+#
+# Two invariants, both enforced only by this comment:
+#   - the `paths:` list here is the exact inverse of ci.yml's `paths-ignore:`
+#     (same entries, verbatim) — drift opens a PR class that triggers neither
+#     workflow and hangs on the required check;
+#   - the job `name:` is byte-identical to the checks job in ci.yml (adoption
+#     edits that name when it deletes steps — mirror it here).
+#
+# On a PR touching both code and docs, both workflows run and both report the
+# same check name; the real one finishes last and its result wins. Costs
+# seconds of billed time, only on doc-only and mixed PRs.
+
+on:
+  pull_request:
+    paths:
+      - "docs/**"
+      - "**.md"
+      - ".claude/**"
+
+jobs:
+  checks:
+    name: checks (format, type-check, lint, build, test)
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    steps:
+      - run: echo "doc-only change — the real checks job does not run on these paths"
