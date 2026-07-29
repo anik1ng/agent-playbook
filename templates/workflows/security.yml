@@ -1,0 +1,52 @@
+name: Security
+
+# Secret scanning on every PR. A leaked credential is the one irreversible
+# failure class in a repo: history can't be scrubbed painlessly, and agent
+# review can miss a pasted key (the human never reads diffs — CI is the only
+# machine guarantee).
+#
+# Coverage model: PR-only, deliberately. The action scans that PR's commits, so
+# every commit is scanned BEFORE it lands. A default-branch push trigger would
+# only ever re-scan content already cleared: a squash commit is built by GitHub
+# from the PR commits this workflow just read, and direct pushes are blocked by
+# the committed .githooks/pre-push hook. It would bill a full runner-minute per
+# merge for zero new coverage.
+#
+# Note the filter asymmetry with ci.yml: that workflow skips doc-only changes,
+# this one never does — secrets land in markdown too.
+#
+# History PREDATING this workflow is not re-scanned on every run. Sweep it once
+# at adoption (a high-signal pattern grep over `git log --all -p`) and record
+# the date here.
+#
+# Deliberately a SEPARATE workflow from ci.yml, same reasoning as
+# pr-hygiene.yml: ci.yml is a magnet file, and a standalone file avoids
+# racing in-flight PRs that touch it.
+#
+# If gitleaks flags a false positive, allowlist it in a committed
+# .gitleaks.toml WITH a justification comment — never by deleting this job.
+
+on:
+  pull_request:
+
+# The default token here is contents-only; the action lists the PR's commits
+# via the API and crashes with a 403 without pull-requests read.
+permissions:
+  contents: read
+  pull-requests: read
+
+jobs:
+  gitleaks:
+    name: gitleaks (secret scan)
+    runs-on: ubuntu-latest
+    # Insurance against a hung job burning the free-tier quota; the real run is
+    # well under a minute even with fetch-depth: 0.
+    timeout-minutes: 5
+    steps:
+      - uses: actions/checkout@v7
+        with:
+          # Full history: old leaks are as live as new ones until rotated.
+          fetch-depth: 0
+      - uses: gitleaks/gitleaks-action@v3
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
