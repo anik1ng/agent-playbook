@@ -41,6 +41,10 @@ Afterwards, [`SETUP.md`](SETUP.md) is your part: the one-time GitHub configurati
 merge settings, the branch ruleset with required status checks, Advanced Security,
 Actions hardening. ~10 minutes, once per repository.
 
+Bringing an already-adopted repository up to date later is the third operation,
+[`UPDATE.md`](UPDATE.md), asked for the same way — *"Read UPDATE.md from
+github.com/anik1ng/agent-playbook and sync this repository."*
+
 ## What lands in your repo
 
 ```
@@ -84,9 +88,15 @@ and starts routing around them.
 
 ## What this does and does not do
 
-**Adoption copies once.** From that moment the files belong to your repository — edit
-them freely. There is no update mechanism and none is planned: your `AGENTS.md` diverges
-from these templates the day you fill in your first magnet file, and that is the point.
+**Two classes of file, and only one of them ever updates.** `AGENTS.md`, `ci.yml` and
+`docs/RUNBOOK.md` become yours the moment they land: your `AGENTS.md` diverges from this
+template the day you fill in your first magnet file, and that is the point — nothing here
+ever touches those three again. The rest — the three skills, `pr-hygiene.yml`,
+`security.yml`, `ci-docs.yml`, `dependabot.yml`, the PR template, the pre-push hook,
+`.claude/settings.json` — carry nothing project-specific and are meant to stay identical
+to these templates. When the playbook moves, [`UPDATE.md`](UPDATE.md) re-syncs exactly
+that second class: it diffs them, shows you every difference before writing anything, and
+lands the result as one PR.
 
 **Node/TypeScript, GitHub, `gh` CLI.** The templates assume `package.json` scripts,
 GitHub issues/PRs and a working `gh`. Other toolchains and forges: adapt by hand —
