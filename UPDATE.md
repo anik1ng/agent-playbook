@@ -103,10 +103,11 @@ where you found them). You never push to the default branch and never merge.
 
     chore: sync playbook files
 
-- **Edit the skills at `.agents/skills/<name>/SKILL.md`.** `.claude/skills/<name>` is a
-  symlink to that directory; a tool that replaces a file rather than writing through it
-  turns the symlink into a real second copy, and a second copy drifts. Check afterwards
-  that all three are still symlinks.
+- **Edit the skills at `.agents/skills/<name>/SKILL.md` — the real files.**
+  `.claude/skills/<name>` is a symlink to that directory: a write through it normally
+  resolves to the same file, but a tool that recreates the path instead of following it
+  leaves a real directory holding a second copy, and a second copy drifts. Check
+  afterwards that all three are still symlinks.
 - No `{{...}}` token may survive in anything you wrote. The rendered `pre-push` in
   particular is a shell script that runs on every push — a surviving placeholder is a
   broken lock, not a cosmetic bug.
