@@ -113,6 +113,12 @@ because neither half can do the other's job:
 <!-- Customize: nothing. If an agent ever uses one of these, that is an AGENTS.md "Never" entry. -->
 
 - `ALLOW_DIRECT_PUSH=1 git push …` — direct push to the default branch, past the pre-push hook.
+  This clears the LOCAL hook only. If the branch ruleset (the playbook's SETUP.md §2)
+  is configured, GitHub still refuses the push — temporarily switch the ruleset to
+  Disabled (Settings → Rules → Rulesets, or
+  `gh api -X PUT repos/{owner}/{repo}/rulesets/<id> -f enforcement=disabled`), push,
+  then switch it back to Active IMMEDIATELY: while it is disabled, nothing protects
+  the branch.
 - `SKIP_PUSH_GATE=1 git push …` — skip the local static gate.
 
 ## When something looks broken
