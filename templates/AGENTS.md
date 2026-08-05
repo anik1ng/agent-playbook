@@ -82,6 +82,10 @@ Where all working copies share ONE dev database (or any other single-writer reso
 ## Getting to master
 
 <!-- Customize: the gate command line below — it must be the exact command an agent can paste. -->
+<!-- Customize: if the repo has suites CI cannot run (a DB-gated smoke suite, a
+hardware test), name them here WITH the condition that makes them mandatory
+("diff touches X -> run Y"). CI's silence on those paths is exactly why the gate
+must carry them. -->
 
 - **`/ship`** (`.agents/skills/ship/SKILL.md`) is the executable form of this section — refuse
   on the default branch or a dirty tree, rebase, gate, push, PR. This section stays canonical:
