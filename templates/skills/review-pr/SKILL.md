@@ -48,9 +48,11 @@ Checklist, in priority order:
    protected-branch block edited, an override made easier to reach.
    This is a separate item from test integrity because it fails differently: a weakened test
    still shows up as a changed test file, but a deleted workflow does not go red — it stops
-   existing, and its check quietly disappears from the PR's list of checks. Unless the human
-   has required status checks configured (a paid-plan feature this project may not have),
-   nothing downstream ever notices. You are the only reader that can.
+   existing, and its check quietly disappears from the PR's list of checks.
+   Check rather than assume whether required status checks back you up:
+   `gh api repos/{owner}/{repo}/rulesets`. If an active ruleset requires this repo's
+   check contexts, a deleted workflow blocks the merge server-side; if not, you are
+   the only reader that can notice. Either way, the weakening itself is yours to catch.
    The reflexive case counts too: a PR editing this checklist is editing the rules you are
    reviewing under. Review it against the version you loaded, and say in the verdict that
    you did.
