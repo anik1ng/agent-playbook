@@ -120,10 +120,11 @@ Where all working copies share ONE dev database (or any other single-writer reso
 - The human's merge ritual: never merge while the "Update branch" button is visible (a green
   CI there belongs to a stale merge preview); never merge without a green check on the PR's
   LATEST commit.
-- The committed `.githooks/pre-push` hook is the real lock against direct pushes to
-  `{{DEFAULT_BRANCH}}`, and it also runs the static gate before any branch push. Never bypass
-  it (`ALLOW_DIRECT_PUSH`, `SKIP_PUSH_GATE`, `--no-verify`) — those overrides are the
-  human's.
+- The committed `.githooks/pre-push` hook blocks direct pushes to `{{DEFAULT_BRANCH}}`
+  locally and runs the static gate before any branch push; the server-side branch
+  ruleset (the playbook's SETUP.md §2), where configured, enforces the same lock on
+  GitHub's side. Never bypass the hook (`ALLOW_DIRECT_PUSH`, `SKIP_PUSH_GATE`,
+  `--no-verify`) — those overrides are the human's.
 - **The gates are not part of the work.** `.github/workflows/*`, `.githooks/*` and
   `.agents/skills/*` change only when the issue is ABOUT them. Never edit one to get a PR
   green — not the trigger, not a `paths-ignore`, not an `if:`, not a step, not a checklist

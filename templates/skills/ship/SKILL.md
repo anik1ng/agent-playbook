@@ -53,8 +53,9 @@ comment saying why.
 
     git push -u origin <branch>
 
-The repo's `.githooks/pre-push` hook runs the static gate and is the real lock against direct
-pushes to the default branch. It must run: `--no-verify`, `SKIP_PUSH_GATE` and
+The repo's `.githooks/pre-push` hook runs the static gate and blocks direct pushes
+to the default branch locally; the server-side branch ruleset, where configured,
+refuses them too. It must run: `--no-verify`, `SKIP_PUSH_GATE` and
 `ALLOW_DIRECT_PUSH` are the human's overrides and are forbidden to you (AGENTS.md "Getting to
 master").
 
