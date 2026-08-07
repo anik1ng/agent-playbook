@@ -61,6 +61,7 @@ docs/RUNBOOK.md                      the human's page: what YOU run and remember
 .agents/skills/do/SKILL.md           issue → (spec → plan, when it needs one) → branch → implementation → PR
 .agents/skills/ship/SKILL.md         rebase → local gate → push → PR
 .agents/skills/review/SKILL.md       the independent reviewer's checklist
+.agents/auto-review.sh               optional: lets /ship start that reviewer itself, headless
 .claude/skills/{do,ship,review}      symlinks → ../../.agents/skills/<name>
 ```
 
@@ -75,6 +76,16 @@ design decisions get the same independent review as code), files the plan's phas
 sub-issues, and stops; implementation then runs in fresh sessions, one `/do <n>` per
 sub-issue, reading only the committed artifacts. A two-line reminder issue is a valid
 entry point — the pipeline grows it when its turn comes.
+
+**The review can start itself.** At adoption the agent detects which agent CLIs are
+installed, and you pick one — a different model family than the tool that writes your
+PRs — to be the automatic reviewer. From then on `/ship` launches
+`.agents/auto-review.sh` in the background after every PR it opens or updates: a headless
+session of that CLI follows the same `review` skill and posts the same
+`Reviewed-by:`-headed verdict comment, so your part shrinks to reading verdicts and
+merging. The reviewer process is machine-denied `git push` and `gh pr merge`/`close`;
+skip the whole thing at adoption and reviews stay manual (`/review <n>`), with nothing
+else changed.
 
 **Why `.agents/`.** It is the location Codex/ChatGPT and Antigravity/Gemini read
 directly. Claude Code reads only `.claude/skills/`, but it follows a symlink there — hence
@@ -101,11 +112,11 @@ and starts routing around them.
 `docs/RUNBOOK.md` become yours the moment they land: your `AGENTS.md` diverges from this
 template the day you fill in your first magnet file, and that is the point — nothing here
 ever touches those three again. The rest — the three skills, `pr-hygiene.yml`,
-`security.yml`, `ci-docs.yml`, `dependabot.yml`, the PR template, the pre-push hook,
-`.claude/settings.json` — carry nothing project-specific and are meant to stay identical
-to these templates. When the playbook moves, [`UPDATE.md`](UPDATE.md) re-syncs exactly
-that second class: it diffs them, shows you every difference before writing anything, and
-lands the result as one PR.
+`security.yml`, `ci-docs.yml`, `dependabot.yml`, the PR template, the pre-push hook, the
+auto-review launcher, `.claude/settings.json` — carry nothing project-specific (or only a
+declared, bounded insertion) and are meant to stay identical to these templates. When the
+playbook moves, [`UPDATE.md`](UPDATE.md) re-syncs exactly that second class: it diffs
+them, shows you every difference before writing anything, and lands the result as one PR.
 
 **Node/TypeScript, GitHub, `gh` CLI.** The templates assume `package.json` scripts,
 GitHub issues/PRs and a working `gh`. Other toolchains and forges: adapt by hand —
