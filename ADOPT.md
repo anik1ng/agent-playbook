@@ -204,7 +204,9 @@ never an assumption:
   irreversible stays machine-denied: configure the CLI's own permission settings to deny
   `git push`, `gh pr merge` and `gh pr close`. If the chosen CLI has no deny mechanism,
   say so plainly and let the human decide whether prose ("the reviewer never pushes" in
-  the `review` skill) is enough for them.
+  the `review` skill) is enough for them. Either way, the step-8 summary records which
+  posture this repo actually got — machine-denied, or prose-only accepted — the script's
+  header points future readers at that record.
 - No CLI installed, or the human declines → do not install `.agents/auto-review.sh` at
   all. The `ship` skill skips the absent script silently; reviews stay manual
   (`/review <n>` in a fresh session), and the summary in step 8 says so.
@@ -214,11 +216,13 @@ never an assumption:
 Under Rule 0, render and place everything from the table in step 1, then create the three
 symlinks. Two files get special treatment:
 
-- **`.claude/settings.json`**, when it already exists: the template sets only
-  `attribution` (suppresses the `Co-Authored-By` trailer and the PR byline — the machine
-  form of the prose rule in `AGENTS.md`). Do not offer "take the template" as an
-  overwrite: show the human their existing JSON with the `attribution` object merged in,
-  and write THAT if they agree.
+- **`.claude/settings.json`**, when it already exists: the template sets `attribution`
+  (suppresses the `Co-Authored-By` trailer and the PR byline — the machine form of the
+  prose rule in `AGENTS.md`) and one `permissions.allow` rule,
+  `Bash(nohup .agents/auto-review.sh:*)` — without it, Claude Code's restricted
+  permission modes block the `ship` skill's detached reviewer launch, and the review
+  silently never starts. Do not offer "take the template" as an overwrite: show the human
+  their existing JSON with both keys merged in, and write THAT if they agree.
 - **`CLAUDE.md`**, when the repo has none: offer to create one containing only
   `@AGENTS.md` — one source of truth, loaded automatically in Claude Code. (If the human
   uses another tool with a wrapper file — `GEMINI.md` — same offer, same one line.)
