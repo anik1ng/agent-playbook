@@ -21,6 +21,12 @@
 #     protocol is the only guard — the adoption summary records which of
 #     the two THIS repo has.
 #
+# The human watches the PR page, not this process — so the process reports
+# there: an `auto-review` commit status on the PR's head, pending at launch,
+# then success ("verdict posted") or failure ("no verdict — see the log").
+# The status answers "is a review running / did it die"; the verdict itself is
+# ALWAYS the comment — a green auto-review status is not an approval.
+#
 # Output goes to a per-PR log under .git/ (per-clone, never committed) — some
 # CLIs drop stdout on a non-TTY, and the deliverable is the PR comment anyway.
 # The log is for the human debugging a review that never landed.
@@ -37,12 +43,25 @@ GIT_DIR=$(git rev-parse --git-dir 2>/dev/null) || {
 PIDFILE="$GIT_DIR/auto-review-$PR.pid"
 LOG="$GIT_DIR/auto-review-$PR.log"
 
+# Visibility is best-effort by design: if gh or the network is down, the
+# review still runs and the log still fills — only the PR-page signal is lost.
+HEAD_SHA=$(gh pr view "$PR" --json headRefOid --jq .headRefOid 2>/dev/null)
+
+set_status() { # $1 = pending|success|failure, $2 = description
+  [ -n "$HEAD_SHA" ] || return 0
+  gh api "repos/{owner}/{repo}/statuses/$HEAD_SHA" \
+    -f state="$1" -f context=auto-review -f description="$2" \
+    >/dev/null 2>&1 || true
+}
+
 OLD_PID=""
 [ -f "$PIDFILE" ] && OLD_PID=$(cat "$PIDFILE" 2>/dev/null)
 
 {
-  echo "=== auto-review PR #$PR started: $(date -u '+%Y-%m-%dT%H:%M:%SZ') ==="
+  echo "=== auto-review PR #$PR (head ${HEAD_SHA:-unknown}) started: $(date -u '+%Y-%m-%dT%H:%M:%SZ') ==="
 } >>"$LOG"
+
+set_status pending "reviewer running — verdict lands as a PR comment"
 
 {{REVIEW_CMD}} >>"$LOG" 2>&1 &
 CHILD=$!
@@ -58,7 +77,24 @@ wait "$CHILD"
 STATUS=$?
 # Only clean up our own pidfile: if a newer launch superseded us while we ran,
 # the file now holds ITS pid, and deleting it would orphan that reviewer.
-[ "$(cat "$PIDFILE" 2>/dev/null)" = "$CHILD" ] && rm -f "$PIDFILE"
+IS_CURRENT=false
+[ "$(cat "$PIDFILE" 2>/dev/null)" = "$CHILD" ] && IS_CURRENT=true
+[ "$IS_CURRENT" = true ] && rm -f "$PIDFILE"
 
 echo "=== auto-review PR #$PR exited $STATUS ===" >>"$LOG"
+
+# Superseded → say nothing: the newer launch owns the PR-page signal now.
+# Otherwise the truth is the comment, not the exit code: a reviewer that
+# exited 0 without posting still failed, and one that posted before dying
+# still delivered.
+if [ "$IS_CURRENT" = true ] && [ -n "$HEAD_SHA" ]; then
+  SHORT=$(printf '%.7s' "$HEAD_SHA")
+  if gh pr view "$PR" --json comments --jq '.comments[].body' 2>/dev/null \
+      | grep -q "head $SHORT"; then
+    set_status success "verdict posted for $SHORT — read it before merging"
+  else
+    set_status failure "no verdict for $SHORT (exit $STATUS) — see .git/auto-review-$PR.log"
+  fi
+fi
+
 exit $STATUS
