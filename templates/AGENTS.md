@@ -218,8 +218,10 @@ must carry them. -->
   the same `review` skill and posts the same verdict comment. A spawned headless process IS
   a fresh session — different tool, zero shared context with the author. Automation removes
   the human's typing, never the review: the protocol, the verdict comment and the re-review
-  rules apply unchanged, and the reviewer process stays report-only — its CLI's permission
-  config denies `git push`, `gh pr merge` and `gh pr close` outright.
+  rules apply unchanged, and the reviewer process stays report-only: where its CLI's
+  permission config supports a deny list, adoption sets it to refuse `git push` and
+  `gh pr merge`/`close` outright; where the CLI has no deny mechanism, that gap was
+  accepted knowingly at adoption and this protocol is the guard.
 
 ## Model routing (principles, not model names)
 

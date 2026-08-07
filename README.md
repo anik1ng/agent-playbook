@@ -57,7 +57,7 @@ docs/RUNBOOK.md                      the human's page: what YOU run and remember
 .github/dependabot.yml               grouped weekly bumps, supply-chain cooldowns
 .github/pull_request_template.md
 .githooks/pre-push                   the lock: no direct pushes to the default branch
-.claude/settings.json                no AI-attribution trailers on commits/PRs
+.claude/settings.json                no AI-attribution trailers; allows the auto-review launch
 .agents/skills/do/SKILL.md           issue → (spec → plan, when it needs one) → branch → implementation → PR
 .agents/skills/ship/SKILL.md         rebase → local gate → push → PR
 .agents/skills/review/SKILL.md       the independent reviewer's checklist
@@ -83,7 +83,8 @@ PRs — to be the automatic reviewer. From then on `/ship` launches
 `.agents/auto-review.sh` in the background after every PR it opens or updates: a headless
 session of that CLI follows the same `review` skill and posts the same
 `Reviewed-by:`-headed verdict comment, so your part shrinks to reading verdicts and
-merging. The reviewer process is machine-denied `git push` and `gh pr merge`/`close`;
+merging. The reviewer process stays report-only — machine-denied `git push` and
+`gh pr merge`/`close` where the chosen CLI's permission config supports a deny list;
 skip the whole thing at adoption and reviews stay manual (`/review <n>`), with nothing
 else changed.
 
