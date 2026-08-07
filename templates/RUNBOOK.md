@@ -14,12 +14,15 @@ in this page — file it.
 
 <!-- Customize: add the commands you actually type; delete the lines that don't apply. -->
 
-- **Starting a task**: type `/do-issue <n>` in the agent session — that replaces the whole
+- **Starting a task**: type `/do <n>` in the agent session — that replaces the whole
   typed preamble. It reads `AGENTS.md` and issue #n **including its comments** (spec
-  amendments live there), gets onto the right branch, implements, and ships the PR. `/ship`
-  on its own re-runs just the tail — rebase, gate, push, PR — on a branch whose work is
-  already done and committed.
-- **Where those three live**: `.agents/skills/{do-issue,ship,review-pr}/SKILL.md`, in this
+  amendments live there), then decides what the issue needs next: a substantial issue with
+  no spec turns the session into a brainstorm that writes the spec and the plan (`AGENTS.md`
+  "Specs and plans") and stops; otherwise it gets onto the right branch, implements, and
+  ships the PR. Filing a two-line reminder issue is fine — `/do` grows it when its turn
+  comes. `/ship` on its own re-runs just the tail — rebase, gate, push, PR — on a branch
+  whose work is already done and committed.
+- **Where those three live**: `.agents/skills/{do,ship,review}/SKILL.md`, in this
   repo. They are ordinary files — edit them when a rule of yours changes, same as any doc.
   `.claude/skills/*` are symlinks to them, because Claude Code doesn't read `.agents/`. Every
   other agent tool reads `.agents/` directly, which is the point: the reviewer is supposed to
@@ -99,7 +102,7 @@ because neither half can do the other's job:
   is visible; never merge without green CI on the PR's LATEST commit) are in `AGENTS.md`
   "Getting to master".
 - Independent review before merging substantive PRs: a FRESH agent session runs
-  `/review-pr <n>` — cross-family review is deliberate. Wait for `VERDICT: approve`,
+  `/review <n>` — cross-family review is deliberate. Wait for `VERDICT: approve`,
   **posted as a comment on the PR**. A reviewer that reports a verdict only in its own chat
   window has left you nothing to merge against; if that happens, ask it to post the comment
   before you merge.

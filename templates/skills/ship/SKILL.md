@@ -19,7 +19,7 @@ Detect the default branch rather than assuming its name:
     git status -sb
 
 - **On the default branch** → STOP. Agents never push to it (AGENTS.md "Never"). Get on a
-  task branch first — the `do-issue` skill does that.
+  task branch first — the `do` skill does that.
 - **Dirty tree** → STOP. Commit the work first (AGENTS.md "Workflow" says whether that needs
   approval), or say what the stray files are. A rebase over uncommitted changes is how work
   gets lost.
@@ -101,6 +101,6 @@ Also fill, honestly:
 
 Print the PR URL, and state plainly: what still needs doing (anything the human owes —
 env vars, dashboard clicks, one-off SQL), and that a substantive PR gets an independent
-`review-pr` pass from a FRESH session — ideally a different model family, which is the one
+`review` pass from a FRESH session — ideally a different model family, which is the one
 hard rule in AGENTS.md "Model routing" — before the human merges. You never merge, and green
 CI is not permission to merge.

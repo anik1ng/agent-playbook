@@ -39,9 +39,9 @@ Thirteen files plus three symlinks:
 | `dependabot.yml`              | `.github/dependabot.yml`             |
 | `githooks/pre-push`           | `.githooks/pre-push` (chmod 755)     |
 | `settings.json`               | `.claude/settings.json`              |
-| `skills/do-issue/SKILL.md`    | `.agents/skills/do-issue/SKILL.md`   |
+| `skills/do/SKILL.md`          | `.agents/skills/do/SKILL.md`         |
 | `skills/ship/SKILL.md`        | `.agents/skills/ship/SKILL.md`       |
-| `skills/review-pr/SKILL.md`   | `.agents/skills/review-pr/SKILL.md`  |
+| `skills/review/SKILL.md`      | `.agents/skills/review/SKILL.md`     |
 
 Then the symlinks — RELATIVE, never absolute, so they survive the repo being cloned to a
 different path: `.claude/skills/<name>` → `../../.agents/skills/<name>`, for each of the

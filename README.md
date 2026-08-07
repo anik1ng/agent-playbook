@@ -58,19 +58,28 @@ docs/RUNBOOK.md                      the human's page: what YOU run and remember
 .github/pull_request_template.md
 .githooks/pre-push                   the lock: no direct pushes to the default branch
 .claude/settings.json                no AI-attribution trailers on commits/PRs
-.agents/skills/do-issue/SKILL.md     issue → branch → implementation → PR
+.agents/skills/do/SKILL.md           issue → (spec → plan, when it needs one) → branch → implementation → PR
 .agents/skills/ship/SKILL.md         rebase → local gate → push → PR
-.agents/skills/review-pr/SKILL.md    the independent reviewer's checklist
-.claude/skills/{do-issue,ship,review-pr}   symlinks → ../../.agents/skills/<name>
+.agents/skills/review/SKILL.md       the independent reviewer's checklist
+.claude/skills/{do,ship,review}      symlinks → ../../.agents/skills/<name>
 ```
 
-After adoption the skills are invoked as **`/do-issue <n>`**, **`/ship`** and
-**`/review-pr <n>`** in Claude Code, and read directly as files by every other tool.
+After adoption the skills are invoked as **`/do <n>`**, **`/ship`** and
+**`/review <n>`** in Claude Code, and read directly as files by every other tool.
+
+`/do` is a dispatcher, and the one command the human has to remember: it reads the issue
+and decides what it needs next. A small fix goes straight to implementation. A substantial
+issue with no spec turns the session into a brainstorm — the agent interviews the human,
+writes a spec and a plan (committed under `docs/superpowers/`, shipped as their own PR, so
+design decisions get the same independent review as code), files the plan's phases as
+sub-issues, and stops; implementation then runs in fresh sessions, one `/do <n>` per
+sub-issue, reading only the committed artifacts. A two-line reminder issue is a valid
+entry point — the pipeline grows it when its turn comes.
 
 **Why `.agents/`.** It is the location Codex/ChatGPT and Antigravity/Gemini read
 directly. Claude Code reads only `.claude/skills/`, but it follows a symlink there — hence
 one real copy plus a symlink, rather than two copies that drift. This matters most for
-`review-pr`: the one hard rule in `AGENTS.md` — **review comes from a different model
+`review`: the one hard rule in `AGENTS.md` — **review comes from a different model
 family than the author** — sends you to tools that cannot read anything vendor-specific.
 A reviewer with nothing to read improvises a review and then reports that it followed
 yours.
