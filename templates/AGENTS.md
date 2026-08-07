@@ -216,7 +216,10 @@ must carry them. -->
   a different family than the authoring tool), the `ship` skill launches it in the
   background right after a PR is opened or updated: a headless session of that CLI follows
   the same `review` skill and posts the same verdict comment. A spawned headless process IS
-  a fresh session — different tool, zero shared context with the author. Automation removes
+  a fresh session — different tool, zero shared context with the author. The launcher
+  reports its lifecycle as an `auto-review` commit status on the PR head (pending →
+  success/failure), so a running or dead review is visible on the PR page, not only in a
+  local log; the verdict is still ONLY the comment — a green status is not an approval. Automation removes
   the human's typing, never the review: the protocol, the verdict comment and the re-review
   rules apply unchanged, and the reviewer process stays report-only: where its CLI's
   permission config supports a deny list, adoption sets it to refuse `git push` and
