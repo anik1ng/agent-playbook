@@ -14,9 +14,12 @@
 #   - it runs the CLI in headless/non-interactive mode with permissions wide
 #     enough for the review protocol (probe tests, mutation runs, the local
 #     gate, `gh`) — a soft-denied tool hollows the review out silently;
-#   - the irreversible stays machine-denied: the CLI's own permission config
-#     (rendered at adoption too) denies `git push`, `gh pr merge` and
-#     `gh pr close` outright. The reviewer REPORTS; it never pushes.
+#   - the reviewer REPORTS; it never pushes. Where the CLI's permission
+#     config supports a deny list, adoption sets it to refuse `git push`,
+#     `gh pr merge` and `gh pr close` outright; where it supports none, the
+#     human accepted at adoption that the `review` skill's report-only
+#     protocol is the only guard — the adoption summary records which of
+#     the two THIS repo has.
 #
 # Output goes to a per-PR log under .git/ (per-clone, never committed) — some
 # CLIs drop stdout on a non-TTY, and the deliverable is the PR comment anyway.

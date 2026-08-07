@@ -106,9 +106,17 @@ verdict, so it gets a fresh review too):
 
     nohup .agents/auto-review.sh <pr-number> >/dev/null 2>&1 &
 
+Run it as its OWN command, nothing chained after it: a diagnostic appended to the launch
+(`… & sleep 2; cat …`) both violates "never read its output" and turns a command the
+repo's `.claude/settings.json` explicitly allows into a compound one a permission layer
+may refuse.
+
 Say you launched it. Never wait for it and never read its output — its deliverable is a
 verdict comment on the PR, not anything in your transcript. If the script is absent or not
-executable, skip silently: this repo runs its reviews by hand.
+executable, skip silently: this repo runs its reviews by hand. But if the launch itself is
+DENIED by your harness's permission layer, do not skip silently — say so plainly: the
+allow rule for exactly this command ships in `.claude/settings.json`, so a denial means
+that setting is missing or overridden, and a review the human assumes started never did.
 
 Print the PR URL, and state plainly: what still needs doing (anything the human owes —
 env vars, dashboard clicks, one-off SQL), and that a substantive PR gets an independent
