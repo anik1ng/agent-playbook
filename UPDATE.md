@@ -34,7 +34,7 @@ divergence. Compare and sync them **byte-for-byte**:
 | `.github/dependabot.yml`            | `templates/dependabot.yml`            |
 | `.claude/settings.json`             | `templates/settings.json`             |
 
-Three more are Class A with a **declared insertion** — identical to the template apart
+Four more are Class A with a **declared insertion** — identical to the template apart
 from one named, bounded local part, which survives the sync:
 
 - **`.githooks/pre-push`** — carries `{{DEFAULT_BRANCH}}` and `{{PKG_MANAGER}}`.
@@ -45,6 +45,13 @@ from one named, bounded local part, which survives the sync:
 - **`.github/workflows/security.yml`** — its header comment records the date of this
   repo's one-time history secret sweep. That line is this repo's evidence and cannot be
   regenerated; keep it, sync everything around it.
+- **`.agents/auto-review.sh`** — carries `{{REVIEW_CMD}}`: the line holding the reviewer
+  CLI command this repo chose at adoption (`templates/scripts/auto-review.sh` in the
+  playbook). That choice was the human's and cannot be re-derived from the repo — keep
+  the rendered command line, sync the skeleton around it, and check the file stayed
+  executable. A repo without the file chose manual reviews: that is a
+  "missing in the repo" row below — OFFER it (it needs ADOPT.md's "Reviewer CLI"
+  detection and a human choice), never install it silently.
 - **`.github/workflows/ci-docs.yml`** — its job `name:` must be byte-identical to the
   `checks` job in THIS repo's `ci.yml` (adoption edits that name when it deletes steps),
   and its `paths:` list is the exact inverse of that file's `paths-ignore:`. Where the
