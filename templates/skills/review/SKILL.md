@@ -40,12 +40,14 @@ Checklist, in priority order:
    change without explicit justification in the PR body = blocker. CI green is the
    only machine guarantee this project has — tests ARE the safety net.
 2. **Gate integrity.** Does the diff touch `.github/workflows/*`, `.githooks/*`,
-   `.agents/skills/*` (or the `.claude/skills` symlinks into it), or `.claude/settings.json`?
+   `.agents/skills/*` (or the `.claude/skills` symlinks into it), `.agents/auto-review.sh`,
+   or `.claude/settings.json`?
    Then read those hunks line by line, and treat any weakening as a blocker unless the PR
    body asks for it outright and the issue justifies it: a workflow or step deleted, a
    trigger narrowed, a `paths-ignore` widened, an `if:` that exempts more than it did,
    `continue-on-error` added, a timeout raised past reason, the pre-push hook's
-   protected-branch block edited, an override made easier to reach.
+   protected-branch block edited, an override made easier to reach, the auto-review
+   launcher's command line neutered or pointed away from the `review` skill.
    This is a separate item from test integrity because it fails differently: a weakened test
    still shows up as a changed test file, but a deleted workflow does not go red — it stops
    existing, and its check quietly disappears from the PR's list of checks.
