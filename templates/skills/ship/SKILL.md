@@ -99,8 +99,20 @@ Also fill, honestly:
 
 ## 6. Hand off
 
+**Auto-review hook first:** if the repo carries an executable `.agents/auto-review.sh`,
+launch it now, in the background and detached, with the PR number — whether step 5 created
+the PR or step 4's push updated an existing one (a fix push supersedes the previous
+verdict, so it gets a fresh review too):
+
+    nohup .agents/auto-review.sh <pr-number> >/dev/null 2>&1 &
+
+Say you launched it. Never wait for it and never read its output — its deliverable is a
+verdict comment on the PR, not anything in your transcript. If the script is absent or not
+executable, skip silently: this repo runs its reviews by hand.
+
 Print the PR URL, and state plainly: what still needs doing (anything the human owes —
 env vars, dashboard clicks, one-off SQL), and that a substantive PR gets an independent
 `review` pass from a FRESH session — ideally a different model family, which is the one
-hard rule in AGENTS.md "Model routing" — before the human merges. You never merge, and green
-CI is not permission to merge.
+hard rule in AGENTS.md "Model routing" — before the human merges. If you launched the
+auto-review hook, that fresh session is already running and its verdict lands as a PR
+comment. You never merge, and green CI is not permission to merge.

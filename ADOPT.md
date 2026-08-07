@@ -25,7 +25,8 @@ existing setting without showing the exact change and getting a yes.**
 
 ## 1. What you are installing
 
-Thirteen files plus three symlinks:
+Fourteen files plus three symlinks (one file conditional — `auto-review.sh` is installed
+only when the "Reviewer CLI" detection in step 2 ends with the human choosing one):
 
 | Template                      | Destination                          |
 | ----------------------------- | ------------------------------------ |
@@ -42,6 +43,7 @@ Thirteen files plus three symlinks:
 | `skills/do/SKILL.md`          | `.agents/skills/do/SKILL.md`         |
 | `skills/ship/SKILL.md`        | `.agents/skills/ship/SKILL.md`       |
 | `skills/review/SKILL.md`      | `.agents/skills/review/SKILL.md`     |
+| `scripts/auto-review.sh`      | `.agents/auto-review.sh` (chmod 755) |
 
 Then the symlinks — RELATIVE, never absolute, so they survive the repo being cloned to a
 different path: `.claude/skills/<name>` → `../../.agents/skills/<name>`, for each of the
@@ -58,8 +60,10 @@ say which you think it is and ask. Never delete it to make room for the symlink.
 The templates carry placeholders. Four are inline substitutions — `{{DEFAULT_BRANCH}}`,
 `{{PKG_MANAGER}}`, `{{INSTALL_CMD}}`, `{{TEST_CMD}}` — and two stand alone on a line of
 their own and are replaced by a whole indented block, or the line is deleted entirely:
-`{{DB_SERVICE_BLOCK}}`, `{{BUILD_ENV_BLOCK}}`. When you are done, no `{{...}}` token may
-survive in anything you wrote.
+`{{DB_SERVICE_BLOCK}}`, `{{BUILD_ENV_BLOCK}}`. One more, `{{REVIEW_CMD}}` in
+`auto-review.sh`, stands alone on a line and is replaced by the reviewer CLI command the
+"Reviewer CLI" detection renders. When you are done, no `{{...}}` token may survive in
+anything you wrote.
 
 ## 2. Detect — and report what you found before writing anything
 
@@ -177,6 +181,34 @@ of `runs-on:`, so 4 spaces; keep the image major in sync with production; adapt 
 When the job has a database service, the Build step inherits that job-level
 `DATABASE_URL` and needs no dummy for it — only for variables the service does not provide.
 
+**Reviewer CLI** → `{{REVIEW_CMD}}` in `auto-review.sh` — whether reviews can start
+themselves. The `ship` skill launches `.agents/auto-review.sh` after every PR it opens or
+updates: one headless session of a reviewer CLI that follows the `review` skill and posts
+the verdict comment, so the human only reads verdicts. This detection ends in a question,
+never an assumption:
+
+- Detect which agent CLIs are installed (`command -v` over the ones you know — `claude`,
+  `codex`, `agy`, `gemini`, and whatever else the human mentions), report the list, and
+  **ask the human which should run automatic reviews** — reminding them of the one hard
+  rule: the reviewer should be a DIFFERENT model family than the tool that authors their
+  PRs. The human's answer also settles quota: automatic reviews spend that CLI's paid
+  quota on every `/ship`.
+- Render `{{REVIEW_CMD}}` from the chosen CLI's OWN `--help`, not from memory or guides —
+  headless flags churn. The rendered line must reference `"$PR"` (the script's variable),
+  run non-interactive/headless, instruct the CLI to read `.agents/skills/review/SKILL.md`
+  and review PR `#$PR` following it exactly, and carry the model/effort flags the human
+  wants for reviews.
+- Permissions, two-sided by design: the headless run needs approvals wide enough for the
+  full protocol (probe tests, mutation runs, the local gate, `gh`) — a soft-denied tool
+  does not stop the review, it silently hollows it into read-only — while the
+  irreversible stays machine-denied: configure the CLI's own permission settings to deny
+  `git push`, `gh pr merge` and `gh pr close`. If the chosen CLI has no deny mechanism,
+  say so plainly and let the human decide whether prose ("the reviewer never pushes" in
+  the `review` skill) is enough for them.
+- No CLI installed, or the human declines → do not install `.agents/auto-review.sh` at
+  all. The `ship` skill skips the absent script silently; reviews stay manual
+  (`/review <n>` in a fresh session), and the summary in step 8 says so.
+
 ## 3. Write the files
 
 Under Rule 0, render and place everything from the table in step 1, then create the three
@@ -284,11 +316,15 @@ a finding for the human.
 5. **Merge settings**: via `gh api repos/{owner}/{repo}` — squash on, merge/rebase off,
    delete-branch-on-merge on. SKIP with the reason if `gh` or access is missing — a repo
    where this always skips is a repo whose merge settings nobody has ever verified.
+6. **Auto-review, where installed**: `.agents/auto-review.sh` is executable, carries no
+   placeholder, and the CLI its rendered command launches resolves in PATH. SKIP with the
+   reason where the repo chose manual reviews — that is a valid choice, not a failure.
 
 ## 8. Summarize and offer the first commit
 
 Print, in order: what was written vs what existed and how each conflict was resolved; the
-detected values (branch, package manager, test command, database yes/no); the clean-env
+detected values (branch, package manager, test command, database yes/no, reviewer CLI or
+"reviews stay manual"); the clean-env
 build result as something you RAN, with the outcome; which settings were applied and which
 declined; anything left aspirational (no tests, no build, bun). Then offer to commit —
 conventional title, no AI-attribution trailers:

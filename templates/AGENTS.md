@@ -171,8 +171,8 @@ must carry them. -->
   ruleset (the playbook's SETUP.md §2), where configured, enforces the same lock on
   GitHub's side. Never bypass the hook (`ALLOW_DIRECT_PUSH`, `SKIP_PUSH_GATE`,
   `--no-verify`) — those overrides are the human's.
-- **The gates are not part of the work.** `.github/workflows/*`, `.githooks/*` and
-  `.agents/skills/*` change only when the issue is ABOUT them. Never edit one to get a PR
+- **The gates are not part of the work.** `.github/workflows/*`, `.githooks/*`,
+  `.agents/skills/*` and `.agents/auto-review.sh` change only when the issue is ABOUT them. Never edit one to get a PR
   green — not the trigger, not a `paths-ignore`, not an `if:`, not a step, not a checklist
   line. Weakening a gate is the one change that erases its own evidence: a deleted workflow
   does not turn a check red, it makes the check disappear, and this pipeline has no other
@@ -211,6 +211,15 @@ must carry them. -->
 - The reviewer verifies by executing, not by reading alone: throwaway probe tests (gitignored;
   deleted before the verdict), mutation runs, and the local gate. The reviewer never checks
   out another ref — it may be sitting in the author's working copy.
+- **The review may start itself.** Where the repo carries an executable
+  `.agents/auto-review.sh` (rendered at adoption around the reviewer CLI the human chose —
+  a different family than the authoring tool), the `ship` skill launches it in the
+  background right after a PR is opened or updated: a headless session of that CLI follows
+  the same `review` skill and posts the same verdict comment. A spawned headless process IS
+  a fresh session — different tool, zero shared context with the author. Automation removes
+  the human's typing, never the review: the protocol, the verdict comment and the re-review
+  rules apply unchanged, and the reviewer process stays report-only — its CLI's permission
+  config denies `git push`, `gh pr merge` and `gh pr close` outright.
 
 ## Model routing (principles, not model names)
 
@@ -255,7 +264,8 @@ when the lineup changes. The invariants:
 - Applying a schema change to shared state outside the rule above.
 - Bypassing the pre-push hook.
 - Weakening or deleting anything under `.github/workflows/`, `.githooks/` or
-  `.agents/skills/` on a task that is not about those files.
+  `.agents/` (the skills and the auto-review launcher) on a task that is not about
+  those files.
 
 The "commit/push freely" rule applies to YOUR OWN branch only — never to
 `{{DEFAULT_BRANCH}}`.
