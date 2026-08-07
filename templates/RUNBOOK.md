@@ -108,8 +108,12 @@ because neither half can do the other's job:
   before you merge.
 - Where `.agents/auto-review.sh` is installed, `/ship` starts that reviewer for you — on
   the PR's creation and on every fix push — so your part is only reading the verdict
-  comments. Run `/review <n>` by hand when the auto-run never landed a comment, or when
-  you want a second opinion from a different tool.
+  comments. The launcher reports its lifecycle as an **`auto-review` status** in the PR's
+  checks list: pending = reviewer running right now, green = verdict comment posted,
+  red = reviewer died without posting (the log below says why). A green `auto-review` is
+  NOT an approval — it only means the verdict landed; the verdict itself can be a blocker.
+  Run `/review <n>` by hand when the auto-run never landed a comment, or when you want a
+  second opinion from a different tool.
 - The comment's first line is `Reviewed-by: <tool / model family>, head <sha>`, and it is
   the only part you have to read. Two things must be true in it: the family is not the
   author's, and the sha is the PR's latest commit. Either one wrong means the approval on
@@ -138,4 +142,4 @@ because neither half can do the other's job:
 | CI red on `gitleaks`           | Treat as a real leak until proven otherwise; if real: rotate the credential FIRST     |
 | CI red on the build step       | The author fixes it, never you — it fails before the test step, so it fails cheap     |
 | PR hygiene red                 | The body is missing its issue link or its `## Docs` answer — the author writes both   |
-| No verdict comment after `/ship` | Read `.git/auto-review-<pr>.log` in the author's working copy — the reviewer's output lands there, not on screen |
+| No verdict comment after `/ship` | The PR's `auto-review` status says which case: pending = still running; red = died without posting; missing = never launched. Detail: `.git/auto-review-<pr>.log` in the author's working copy |

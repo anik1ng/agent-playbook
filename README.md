@@ -83,7 +83,9 @@ PRs — to be the automatic reviewer. From then on `/ship` launches
 `.agents/auto-review.sh` in the background after every PR it opens or updates: a headless
 session of that CLI follows the same `review` skill and posts the same
 `Reviewed-by:`-headed verdict comment, so your part shrinks to reading verdicts and
-merging. The reviewer process stays report-only — machine-denied `git push` and
+merging. An `auto-review` commit status on the PR tracks the run — pending while the
+reviewer works, green once the verdict lands, red if it died — so a silent failure is
+visible on the PR page instead of in a log nobody opens. The reviewer process stays report-only — machine-denied `git push` and
 `gh pr merge`/`close` where the chosen CLI's permission config supports a deny list;
 skip the whole thing at adoption and reviews stay manual (`/review <n>`), with nothing
 else changed.
