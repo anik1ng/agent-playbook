@@ -111,8 +111,10 @@ Run it as its OWN command, nothing chained after it: a diagnostic appended to th
 repo's `.claude/settings.json` explicitly allows into a compound one a permission layer
 may refuse.
 
-Say you launched it. Never wait for it and never read its output — its deliverable is a
-verdict comment on the PR, not anything in your transcript. If the script is absent or not
+Say you launched it, and that the PR's `auto-review` status will track it (pending while
+the reviewer runs, then green when the verdict comment lands, red if it dies). Never wait
+for it and never read its output — its deliverable is a verdict comment on the PR, not
+anything in your transcript. If the script is absent or not
 executable, skip silently: this repo runs its reviews by hand. But if the launch itself is
 DENIED by your harness's permission layer, do not skip silently — say so plainly: the
 allow rule for exactly this command ships in `.claude/settings.json`, so a denial means
