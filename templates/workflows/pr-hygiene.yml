@@ -75,7 +75,7 @@ jobs:
       # README/AGENTS.md/RUNBOOK. Prose rules get skipped — same failure mode
       # as the issue-link rule above — so the Docs section is machine-required.
       # The check forces the QUESTION to be answered ("which docs, or why
-      # none"); the reviewer verifies the answer is true (review-pr item 10).
+      # none"); the reviewer verifies the answer is true (review item 10).
       - name: Require a filled Docs section
         env:
           PR_BODY: ${{ github.event.pull_request.body }}

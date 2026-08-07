@@ -27,6 +27,44 @@ or a fresh session can catch what no one is reading for.
   stop and ask if it changes the task) — never silently narrow, widen, or transform the task.
   "While I was in there" changes belong in a new issue, not in this PR.
 
+## Specs and plans (upstream of the code)
+
+<!-- Customize: the substantial-work threshold, and the doc paths if the repo keeps them elsewhere. -->
+
+An issue is a SEED, not a spec — a two-line reminder is a valid issue. The `do` skill's
+stage gate decides what it needs next:
+
+- **Small work** (one PR, no new subsystem, no schema change) skips this section entirely:
+  `/do <n>` implements it directly.
+- **Substantial work** (more than one PR to land, a new entity or subsystem, an
+  architectural decision, a schema change) gets a SPEC first, then a PLAN. When unsure,
+  it is substantial.
+
+The cycle, and why it splits across sessions:
+
+- **Spec and plan are written in ONE session, by the strongest tier available** (see
+  "Model routing") — a brainstorm that interviews the human (questions one at a time,
+  alternatives with trade-offs) and only then writes. The spec records the decisions AND
+  the rejected alternatives; the plan decomposes it into bite-sized tasks grouped into
+  phases, each phase sized to one PR, written for an engineer with zero context. Where a
+  dedicated skill exists for this (e.g. superpowers' brainstorming / writing-plans), use
+  it; the `do` skill carries the fallback protocol.
+- **The artifacts are COMMITTED** — they are the repo's history of decisions:
+  `docs/superpowers/specs/YYYY-MM-DD-<topic>-design.md` and
+  `docs/superpowers/plans/YYYY-MM-DD-<topic>.md`, landed together as one PR
+  (`Refs #<seed>`). A spec riding a PR gets the same independent cross-family review as
+  code — and spec errors are the expensive ones (see "Model routing").
+- **The plan's phases become sub-issues**, one per future PR, each `Refs #<umbrella>`;
+  the seed issue becomes the umbrella, its body carrying a task-list checklist of the
+  sub-issues. The docs are the snapshot; the umbrella issue is the live state.
+- **Implementation happens in FRESH sessions** — one per sub-issue, `/do <n>`, reading
+  only the spec, the plan and the issue. The spec+plan session never implements: the docs
+  are the compression of its context, and a fresh executor reading them is cheaper and
+  more reliable than a long session dragging the whole brainstorm behind it.
+- A brainstorm that outgrows its session writes a BRAINSTORM BRIEF —
+  `docs/superpowers/brainstorm-briefs/YYYY-MM-DD-<topic>.md`: confirmed facts, decisions
+  already made, open questions — the input a fresh session turns into the spec.
+
 ## Branch discipline (core invariant)
 
 <!-- Customize: nothing, usually — this section is the load-bearing invariant. Change only the branch-type vocabulary. -->
@@ -42,9 +80,10 @@ or a fresh session can catch what no one is reading for.
   work that already landed.
 - Rebase onto `origin/{{DEFAULT_BRANCH}}` before opening a PR, and again whenever the
   default branch moves while your PR is open.
-- **Entry point: `/do-issue <n>`** (`.agents/skills/do-issue/SKILL.md`) — the executable form
+- **Entry point: `/do <n>`** (`.agents/skills/do/SKILL.md`) — the executable form
   of this section plus the kickoff preamble (read this file, read the issue AND its comments,
-  branch, implement, ship). The rules stay HERE; the skill points at them and loses on drift.
+  run the stage gate from "Specs and plans", branch, implement, ship). The rules stay HERE;
+  the skill points at them and loses on drift.
 
 ## Magnet files (one in-flight branch at a time)
 
@@ -155,12 +194,12 @@ must carry them. -->
 
 <!-- Customize: which model/session reviews, and where throwaway probe tests may live (must be gitignored). -->
 
-- The protocol itself lives in `.agents/skills/review-pr/SKILL.md` — in the repo, in a
+- The protocol itself lives in `.agents/skills/review/SKILL.md` — in the repo, in a
   vendor-neutral location, deliberately NOT inside a Claude Code plugin. The reviewer is
   supposed to be a different model family (see "Model routing"), so the checklist has to be
-  readable by whatever that turns out to be. `.claude/skills/review-pr` is a symlink to it.
+  readable by whatever that turns out to be. `.claude/skills/review` is a symlink to it.
 - Substantive PRs get an independent review before the human merges: a FRESH session (never
-  the authoring one) runs `/review-pr <n>`. The reviewer REPORTS (approve | blocker), as a
+  the authoring one) runs `/review <n>`. The reviewer REPORTS (approve | blocker), as a
   COMMENT ON THE PR; the AUTHOR fixes blockers; then re-review. The reviewer never pushes
   fixes, and a verdict that stayed in the reviewer's transcript did not happen.
 - The verdict comment opens with `Reviewed-by: <tool / model family>, head <sha>`. That one

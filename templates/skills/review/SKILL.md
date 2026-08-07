@@ -1,5 +1,5 @@
 ---
-name: review-pr
+name: review
 description: Independent reviewer pass over a pull request in this repo — the protocol a fresh session follows to approve or block. Use when asked to review, verify, sanity-check or approve a PR, whichever tool you are.
 argument-hint: <pr-number>
 ---

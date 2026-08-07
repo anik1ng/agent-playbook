@@ -1,6 +1,6 @@
 ---
-name: do-issue
-description: Take a GitHub issue in this repo from kickoff to pull request — read the rules and the issue, get on the right branch, implement, ship. Use when asked to work on, implement, pick up or fix an issue by number, whichever tool you are.
+name: do
+description: Take a GitHub issue in this repo to its next stage, end to end — read the rules and the issue, decide whether it needs a spec and a plan first, run that session when one is missing, otherwise branch, implement, ship. Use when asked to work on, implement, pick up, spec out or fix an issue by number, whichever tool you are.
 argument-hint: <issue-number>
 ---
 
@@ -8,9 +8,11 @@ argument-hint: <issue-number>
 If the line above reads back as a literal `$ARGUMENTS`, your tool does not substitute
 arguments — take the number from the request that invoked you and carry on.
 
-You are implementing issue #`<issue>` in this repo, end to end: rules, branch,
-implementation, PR. This file is the executable form of the kickoff ritual the human
-otherwise types by hand every session.
+You are taking issue #`<issue>` in this repo to its next stage. `/do` is a dispatcher:
+the same command serves every stage of an issue's life — a two-line seed becomes a spec
+and a plan, a specced issue becomes code, a small fix goes straight to a PR — and step 3
+decides which of those this session is. This file is the executable form of the kickoff
+ritual the human otherwise types by hand every session.
 
 **`AGENTS.md` in THIS repo is canonical.** This file never restates a rule it could point
 at — where the two disagree, AGENTS.md wins and this file is the bug. Work the steps in
@@ -42,9 +44,50 @@ If the issue leaves a decision explicitly open ("decide whether X"), that is a q
 the human, not a coin flip — ask it before writing the code that depends on the answer.
 
 Derive the branch name you would use from the issue's conventional-commit title prefix:
-`chore(agents): …` → `chore/<kebab-short-name>`. Step 3 may not need it.
+`chore(agents): …` → `chore/<kebab-short-name>`. Step 4 may not need it.
 
-## 3. Get on the right branch — adopt before you create
+## 3. Stage gate — what does this issue need next?
+
+Decide which session this is. The threshold lives in AGENTS.md ("Specs and plans", where
+the repo carries that section); the default where it doesn't: work is **substantial** when
+it takes more than one PR to land, introduces a new entity or subsystem, makes an
+architectural decision, or changes a schema. When unsure, it is substantial. An issue is a
+SEED, not a spec — two lines and a title is a valid issue; this step is where it grows.
+
+1. **Small work** → continue to step 4 and implement. (If the human wrote "no spec
+   needed" on the issue, believe them.)
+2. **Substantial, and the issue or its comments link a committed spec** → read the spec
+   AND its plan before any code; on the shape of the work they outrank both the issue's
+   own prose and your ideas. Then continue to step 4.
+3. **Substantial, and no spec exists** → this session is the SPEC+PLAN session, and it
+   will not implement. Announce that, then:
+
+   - **Brainstorm first.** If a dedicated brainstorming skill is installed (e.g.
+     `superpowers:brainstorming`), use it — it already knows the rest of this stage.
+     Fallback protocol: explore the project context; ask the human clarifying questions
+     ONE AT A TIME; propose 2–3 approaches with trade-offs and a recommendation; get the
+     design approved section by section before writing the doc. Never skip the interview —
+     the conversation IS the point of this stage.
+   - **Write the spec** — `docs/superpowers/specs/YYYY-MM-DD-<topic>-design.md`: the
+     problem, the decisions made, the alternatives rejected and why. Then the **plan**,
+     same session (`superpowers:writing-plans` where installed) —
+     `docs/superpowers/plans/YYYY-MM-DD-<topic>.md`: bite-sized tasks grouped into
+     phases, each phase sized to ONE PR, written for an engineer with zero context.
+   - **Decompose into sub-issues** — one per phase (`gh issue create`), each linking the
+     spec and carrying `Refs #<issue>`. Edit the seed issue into the umbrella: a task-list
+     checklist of the sub-issues in its body, plus a comment linking the spec and plan.
+     The docs are the snapshot of the decisions; the umbrella issue is the live state.
+   - **Ship the artifacts** — the spec + plan (and nothing else) as one PR via step 7,
+     with `Refs #<issue>` as the issue link. The spec riding a PR is deliberate: it gets
+     the same independent review as code, and spec errors are the expensive ones.
+   - **Stop.** Tell the human: the spec and plan are up for review, and implementation
+     starts in a FRESH session with `/do <first sub-issue>`. Do not implement here — the
+     docs are the compression of this session's context, and a fresh executor reading
+     them beats a long session dragging the whole brainstorm behind it (AGENTS.md
+     "Model routing": spec work and execution are different tiers, hence different
+     sessions).
+
+## 4. Get on the right branch — adopt before you create
 
 Detect the default branch rather than assuming its name:
 
@@ -81,7 +124,7 @@ branches is a human action (AGENTS.md "Never").
 the repo's documented setup command once — AGENTS.md names it. If the environment is
 already there, touch nothing.
 
-## 4. Magnet-file overlap check
+## 5. Magnet-file overlap check
 
 If the issue's work touches any file on the AGENTS.md "Magnet files" list, check open PRs
 for overlap BEFORE you start writing:
@@ -94,9 +137,10 @@ don't race. This step is restated here because it is the one agents skip.
 Also check AGENTS.md for a one-branch-at-a-time rule (schema/migrations are the usual case):
 where the repo has one, the generated artifact ships in the SAME PR as its source change.
 
-## 5. Implement
+## 6. Implement
 
-Follow the issue's spec, and AGENTS.md for how:
+Follow the issue's spec — and where step 3 found a committed spec and plan, execute the
+plan's tasks for THIS issue's phase in order — and AGENTS.md for how:
 
 - **Test-first for behavioural changes** ("Tests are the safety net") — a regression test
   that FAILS on current code, then the fix, then green. Where test-first genuinely doesn't
@@ -108,7 +152,7 @@ Follow the issue's spec, and AGENTS.md for how:
 - Commit as you go, in logical well-scoped commits, following AGENTS.md "Workflow" on
   whether that needs approval.
 
-## 6. Ship
+## 7. Ship
 
 Follow the `ship` skill (`/ship`, or read `.agents/skills/ship/SKILL.md` directly): rebase
 onto the default branch, full local gate, push, PR.
@@ -116,6 +160,10 @@ onto the default branch, full local gate, push, PR.
 Two things `ship` deliberately makes you write yourself, with one default from this issue:
 
 - **Issue link:** `Closes #<issue>` — unless this issue is an umbrella / multi-part one
-  that must stay open across several PRs, in which case `Refs #<issue>`.
+  that must stay open across several PRs (a spec+plan PR from step 3 always is), in which
+  case `Refs #<issue>`.
 - **`## Docs`:** written fresh, never boilerplate. Answer the real question — which docs does
   this diff make stale, or why genuinely none.
+
+After a sub-issue's PR lands, tick its checkbox in the umbrella issue — the umbrella is
+the live state of the plan, and an unticked box on merged work misleads the next session.

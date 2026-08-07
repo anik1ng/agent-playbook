@@ -115,7 +115,7 @@ how.
 
 ## 5. Features — Settings → General → Features
 
-- Issues: **ON** — the whole loop runs on them: `/do-issue` reads them, every PR body
+- Issues: **ON** — the whole loop runs on them: `/do` reads them, every PR body
   links one, squash-merge closes it.
 - Wikis: **OFF**. The whole documentation machinery here — the mandatory `## Docs`
   section, the reviewer's docs-honesty check, `docs/RUNBOOK.md` as the human's page —

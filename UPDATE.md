@@ -26,9 +26,9 @@ divergence. Compare and sync them **byte-for-byte**:
 
 | In the adopted repo                 | In the playbook                       |
 | ----------------------------------- | ------------------------------------- |
-| `.agents/skills/do-issue/SKILL.md`  | `templates/skills/do-issue/SKILL.md`  |
+| `.agents/skills/do/SKILL.md`        | `templates/skills/do/SKILL.md`        |
 | `.agents/skills/ship/SKILL.md`      | `templates/skills/ship/SKILL.md`      |
-| `.agents/skills/review-pr/SKILL.md` | `templates/skills/review-pr/SKILL.md` |
+| `.agents/skills/review/SKILL.md`    | `templates/skills/review/SKILL.md`    |
 | `.github/workflows/pr-hygiene.yml`  | `templates/workflows/pr-hygiene.yml`  |
 | `.github/pull_request_template.md`  | `templates/pull_request_template.md`  |
 | `.github/dependabot.yml`            | `templates/dependabot.yml`            |
@@ -87,6 +87,17 @@ and you report which one per file:
 - **missing in the repo** — a file the playbook added after this repo adopted. Offer it,
   with what it does; a new gate is not something to install silently.
 - **present only in the repo** — not yours to delete. Report it and leave it.
+
+**Renamed skills are a MOVE, not a missing-plus-stray pair.** The playbook renamed
+`do-issue` → `do` and `review-pr` → `review`; a repo carrying `.agents/skills/do-issue/`
+or `.agents/skills/review-pr/` is on the old names. For each: `git mv` the directory to
+the new name, replace the old `.claude/skills/<old-name>` symlink with
+`.claude/skills/<new-name>` → `../../.agents/skills/<new-name>`, then sync the file's
+contents as an ordinary `differs`. The old command must not survive alongside the new one
+— two names for the entry point is exactly the drift this page exists to prevent. This
+rename travels with a new `AGENTS.md` section ("Specs and plans") and a reworked stage
+gate in the `do` skill; `AGENTS.md` is Class B, so per the rule below you NAME that
+section to the human as a suggested addition rather than applying it.
 
 ## 3. Show the human the summary BEFORE writing anything
 
