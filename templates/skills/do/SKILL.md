@@ -69,7 +69,10 @@ SEED, not a spec — two lines and a title is a valid issue; this step is where 
      design approved section by section before writing the doc. Never skip the interview —
      the conversation IS the point of this stage.
    - **Write the spec** — `docs/superpowers/specs/YYYY-MM-DD-<topic>-design.md`: the
-     problem, the decisions made, the alternatives rejected and why. Then the **plan**,
+     problem, the decisions made, the alternatives rejected and why. Every claim about
+     platform behavior carries its evidence class (AGENTS.md "Specs and plans" defines
+     the three labels) — and `[verified-by-execution]` is earned by executing, during
+     this session, not by confidence. Then the **plan**,
      same session (`superpowers:writing-plans` where installed) —
      `docs/superpowers/plans/YYYY-MM-DD-<topic>.md`: bite-sized tasks grouped into
      phases, each phase sized to ONE PR, written for an engineer with zero context.
