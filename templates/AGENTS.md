@@ -67,6 +67,15 @@ The cycle, and why it splits across sessions:
 - A brainstorm that outgrows its session writes a BRAINSTORM BRIEF —
   `docs/superpowers/brainstorm-briefs/YYYY-MM-DD-<topic>.md`: confirmed facts, decisions
   already made, open questions — the input a fresh session turns into the spec.
+- **Every factual claim in a brief or a spec carries its evidence class**:
+  `[verified-by-execution]` (a probe or command was RUN and its output seen),
+  `[read-in-source]` (inferred from reading code or docs), or `[assumption]`. Hedges do
+  not survive being written down — "the session might not exist yet at that point"
+  becomes "the session exists" one artifact later, and a wrong claim about platform
+  behavior fans out into every PR written from the spec. The label keeps the doubt
+  visible, and upgrading a claim to `[verified-by-execution]` costs what it should:
+  actually executing something. The reviewer treats an unlabeled platform-behavior
+  claim in a spec as a blocker.
 
 ## Branch discipline (core invariant)
 
