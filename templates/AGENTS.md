@@ -221,10 +221,12 @@ must carry them. -->
   success/failure), so a running or dead review is visible on the PR page, not only in a
   local log; the verdict is still ONLY the comment — a green status is not an approval. Automation removes
   the human's typing, never the review: the protocol, the verdict comment and the re-review
-  rules apply unchanged, and the reviewer process stays report-only: where its CLI's
-  permission config supports a deny list, adoption sets it to refuse `git push` and
-  `gh pr merge`/`close` outright; where the CLI has no deny mechanism, that gap was
-  accepted knowingly at adoption and this protocol is the guard.
+  rules apply unchanged, and the reviewer process stays report-only and repo-scoped:
+  where its CLI's permission config supports a deny list, adoption sets it to refuse
+  `git push` and `gh pr merge`/`close` outright, and its filesystem reach is scoped to
+  this working copy rather than opened with a blanket permission bypass — report-only
+  bounds what it may DO, the scope bounds what it may SEE; where the CLI supports
+  neither, that gap was accepted knowingly at adoption and this protocol is the guard.
 
 ## Model routing (principles, not model names)
 

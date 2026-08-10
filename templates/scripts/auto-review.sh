@@ -1,6 +1,7 @@
 #!/bin/sh
-# Launched detached by the `ship` skill right after a PR is opened or updated:
-# runs ONE headless session of this repo's chosen reviewer CLI, which follows
+# Launched by the `ship` skill right after a PR is opened or updated; detaches
+# ITSELF (see below), so the skill just runs it plainly and moves on. It runs
+# ONE headless session of this repo's chosen reviewer CLI, which follows
 # `.agents/skills/review/SKILL.md` and posts its verdict as a comment on the PR.
 # A spawned headless process is a fresh session — zero shared context with the
 # author — so the "a FRESH session reviews" rule holds; cross-family is a
@@ -14,6 +15,11 @@
 #   - it runs the CLI in headless/non-interactive mode with permissions wide
 #     enough for the review protocol (probe tests, mutation runs, the local
 #     gate, `gh`) — a soft-denied tool hollows the review out silently;
+#   - "wide" means tools, never reach: the run stays scoped to this working
+#     copy (the CLI's sandbox / workspace-trust / allowed-directories
+#     mechanism, per ADOPT.md's "Reviewer CLI" step) and is never launched
+#     with a blanket permission bypass — a bypass does not widen the toolset,
+#     it dissolves the boundary around the repo;
 #   - the reviewer REPORTS; it never pushes. Where the CLI's permission
 #     config supports a deny list, adoption sets it to refuse `git push`,
 #     `gh pr merge` and `gh pr close` outright; where it supports none, the
@@ -35,6 +41,16 @@ PR="$1"
 case "$PR" in
   ''|*[!0-9]*) echo "usage: auto-review.sh <pr-number>" >&2; exit 2 ;;
 esac
+
+# Detach here, not in the caller: the ship skill invokes this script plainly,
+# so the launch mechanics are THIS file's business — a machine that runs its
+# reviewer differently (a terminal-multiplexer session, a container) re-renders
+# only this script, never the vendor-neutral skill. Default: re-exec into the
+# background, disowned from the caller's tty.
+if [ -z "$AUTO_REVIEW_DETACHED" ]; then
+  AUTO_REVIEW_DETACHED=1 nohup "$0" "$PR" >/dev/null 2>&1 &
+  exit 0
+fi
 
 GIT_DIR=$(git rev-parse --git-dir 2>/dev/null) || {
   echo "auto-review: not inside a git repository" >&2
