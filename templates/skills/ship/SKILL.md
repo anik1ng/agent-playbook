@@ -100,16 +100,18 @@ Also fill, honestly:
 ## 6. Hand off
 
 **Auto-review hook first:** if the repo carries an executable `.agents/auto-review.sh`,
-launch it now, in the background and detached, with the PR number — whether step 5 created
-the PR or step 4's push updated an existing one (a fix push supersedes the previous
-verdict, so it gets a fresh review too):
+launch it now with the PR number — whether step 5 created the PR or step 4's push updated
+an existing one (a fix push supersedes the previous verdict, so it gets a fresh review
+too):
 
-    nohup .agents/auto-review.sh <pr-number> >/dev/null 2>&1 &
+    .agents/auto-review.sh <pr-number>
 
-Run it as its OWN command, nothing chained after it: a diagnostic appended to the launch
-(`… & sleep 2; cat …`) both violates "never read its output" and turns a command the
-repo's `.claude/settings.json` explicitly allows into a compound one a permission layer
-may refuse.
+The script detaches itself and returns immediately. HOW the reviewer runs — a background
+process, a terminal session, something else — is the script's own business, decided when
+it was rendered at adoption; this skill only starts it. Run it as its OWN command,
+nothing chained before or after: a diagnostic appended to the launch (`…; sleep 2; cat …`)
+both violates "never read its output" and turns the exact command the repo's
+`.claude/settings.json` allows into a compound one a permission layer may refuse.
 
 Say you launched it, and that the PR's `auto-review` status will track it (pending while
 the reviewer runs, then green when the verdict comment lands, red if it dies). Never wait

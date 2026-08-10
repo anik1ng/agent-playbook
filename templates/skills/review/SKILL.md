@@ -87,7 +87,12 @@ Checklist, in priority order:
      run.
    - Where probes don't fit, mutate: break the changed code the way a plausible bug
      would and confirm exactly the right test fails. Break it three different ways; each
-     mutation should be caught by exactly one test.
+     mutation should be caught by exactly one test. REVERT each mutation as soon as its
+     run finishes — never batch the reverts for the end. You may be in the author's
+     working copy, and a reviewer that dies mid-review leaves its mutation sitting in
+     code the author ships without reading. Before posting the verdict, confirm the
+     tree matches how you found it: probes deleted, mutations reverted, `git status`
+     as clean as it was at the start.
    - Run the gate the author claims (AGENTS.md "Getting to master" defines it) plus the
      affected suites. A red gate is itself a blocker.
 6. **Freshness of the base.** Check how far the branch is behind the default branch. A

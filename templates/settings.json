@@ -5,7 +5,7 @@
   },
   "permissions": {
     "allow": [
-      "Bash(nohup .agents/auto-review.sh:*)"
+      "Bash(.agents/auto-review.sh:*)"
     ]
   }
 }
