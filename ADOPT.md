@@ -198,15 +198,21 @@ never an assumption:
   run non-interactive/headless, instruct the CLI to read `.agents/skills/review/SKILL.md`
   and review PR `#$PR` following it exactly, and carry the model/effort flags the human
   wants for reviews.
-- Permissions, two-sided by design: the headless run needs approvals wide enough for the
-  full protocol (probe tests, mutation runs, the local gate, `gh`) — a soft-denied tool
-  does not stop the review, it silently hollows it into read-only — while the
-  irreversible stays machine-denied: configure the CLI's own permission settings to deny
-  `git push`, `gh pr merge` and `gh pr close`. If the chosen CLI has no deny mechanism,
-  say so plainly and let the human decide whether prose ("the reviewer never pushes" in
-  the `review` skill) is enough for them. Either way, the step-8 summary records which
-  posture this repo actually got — machine-denied, or prose-only accepted — the script's
-  header points future readers at that record.
+- Permissions, three-sided by design. The headless run needs approvals wide enough for
+  the full protocol (probe tests, mutation runs, the local gate, `gh`) — a soft-denied
+  tool does not stop the review, it silently hollows it into read-only. But "wide" is a
+  statement about TOOLS, never about REACH: scope the run to this repository's working
+  copy with whatever the CLI offers (workspace trust, a sandbox flag, an
+  allowed-directories list), and never reach for a blanket permission bypass to get the
+  tools working — a bypass does not widen the toolset, it dissolves the boundary, and a
+  reviewer that can read the filesystem around the repo was granted adoption's
+  convenience, not the protocol's needs. And the irreversible stays machine-denied:
+  configure the CLI's own permission settings to deny `git push`, `gh pr merge` and
+  `gh pr close`. If the chosen CLI cannot scope reads, or has no deny mechanism, say so
+  plainly and let the human decide whether prose ("the reviewer never pushes" in the
+  `review` skill) is enough for them. Either way, the step-8 summary records which
+  posture this repo actually got — scoped and machine-denied, or a gap accepted
+  knowingly — the script's header points future readers at that record.
 - No CLI installed, or the human declines → do not install `.agents/auto-review.sh` at
   all. The `ship` skill skips the absent script silently; reviews stay manual
   (`/review <n>` in a fresh session), and the summary in step 8 says so.
@@ -219,8 +225,8 @@ symlinks. Two files get special treatment:
 - **`.claude/settings.json`**, when it already exists: the template sets `attribution`
   (suppresses the `Co-Authored-By` trailer and the PR byline — the machine form of the
   prose rule in `AGENTS.md`) and one `permissions.allow` rule,
-  `Bash(nohup .agents/auto-review.sh:*)` — without it, Claude Code's restricted
-  permission modes block the `ship` skill's detached reviewer launch, and the review
+  `Bash(.agents/auto-review.sh:*)` — without it, Claude Code's restricted
+  permission modes block the `ship` skill's reviewer launch, and the review
   silently never starts. Do not offer "take the template" as an overwrite: show the human
   their existing JSON with both keys merged in, and write THAT if they agree.
 - **`CLAUDE.md`**, when the repo has none: offer to create one containing only
