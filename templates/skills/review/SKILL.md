@@ -78,8 +78,13 @@ Checklist, in priority order:
    correct — an argument that is `undefined` at runtime, a guard whose helper returns
    the wrong default — where a probe catches them in seconds. For any behavioural diff,
    run the evidence and report what you ran. Scale the effort to the blast radius: a
-   docs/config/pure-deletion PR needs no probes — say so and move on; a diff touching
-   error handling, ordering, or concurrency gets the full battery:
+   docs/config/pure-deletion PR needs no probes — say so and move on — EXCEPT a spec or
+   plan PR (`docs/superpowers/*`): a spec error fans out into every PR written from it,
+   so this is the one docs class where probes matter MORE, not less. There, re-run the
+   probes behind each `[verified-by-execution]` claim, spot-check `[read-in-source]`
+   claims that the implementation will lean on, and treat an unlabeled claim about
+   platform behavior as a blocker (AGENTS.md "Specs and plans" defines the labels).
+   A diff touching error handling, ordering, or concurrency gets the full battery:
    - Write throwaway probe tests against the PR head, in the repo's own test layout and
      under a gitignored path (AGENTS.md names one where the repo has it). Probe the happy
      path with no fault injected, each transient-vs-hard variant, and each precedence

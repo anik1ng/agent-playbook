@@ -32,10 +32,9 @@ divergence. Compare and sync them **byte-for-byte**:
 | `.github/workflows/pr-hygiene.yml`  | `templates/workflows/pr-hygiene.yml`  |
 | `.github/pull_request_template.md`  | `templates/pull_request_template.md`  |
 | `.github/dependabot.yml`            | `templates/dependabot.yml`            |
-| `.claude/settings.json`             | `templates/settings.json`             |
 
-Four more are Class A with a **declared insertion** — identical to the template apart
-from one named, bounded local part, which survives the sync:
+Five more are Class A with a **declared insertion** — identical to the template apart
+from a named, bounded local part, which survives the sync:
 
 - **`.githooks/pre-push`** — carries `{{DEFAULT_BRANCH}}` and `{{PKG_MANAGER}}`.
   Substitute both from THIS repo (the branch from `gh repo view --json defaultBranchRef
@@ -52,6 +51,14 @@ from one named, bounded local part, which survives the sync:
   executable. A repo without the file chose manual reviews: that is a
   "missing in the repo" row below — OFFER it (it needs ADOPT.md's "Reviewer CLI"
   detection and a human choice), never install it silently.
+- **`.claude/settings.json`** — the template owns exactly two things: the `attribution`
+  keys and the `permissions.allow` entry that launches `.agents/auto-review.sh`.
+  Everything else in the file — extra allow rules, hooks, whatever the human or their
+  tools added — is this repo's local part: ADOPT.md installs this file by MERGING into
+  an existing one, so local content here is the design working, not drift. Sync the
+  template-owned keys to the playbook's current values (this is how a changed launch
+  rule, e.g. dropping a `nohup` prefix, reaches adopted repos) and leave every other
+  key and entry untouched. A diff that is only local additions is not a difference.
 - **`.github/workflows/ci-docs.yml`** — its job `name:` must be byte-identical to the
   `checks` job in THIS repo's `ci.yml` (adoption edits that name when it deletes steps),
   and its `paths:` list is the exact inverse of that file's `paths-ignore:`. Where the
@@ -85,7 +92,7 @@ stale copy from a previous run, and never a partial fetch of single files:
 
 ## 2. Diff Class A, file by file
 
-For each row of the table, and each of the three declared-insertion files: compare the
+For each row of the table, and each of the five declared-insertion files: compare the
 repo's copy against the playbook's (after substitution, for `pre-push`). Four outcomes,
 and you report which one per file:
 
