@@ -1,7 +1,7 @@
 /**
  * Retire a task started by `task:start`.
  *
- *   {{PKG_MANAGER}} run task:finish -- <name>
+ *   <pkg-manager> run task:finish -- <name>
  *
  * Two steps, and their ORDER is the whole design:
  *
@@ -23,7 +23,7 @@
  * Imports nothing but node builtins and the pure modules beside it.
  */
 import { execFileSync } from "node:child_process";
-import { existsSync, realpathSync } from "node:fs";
+import { existsSync, readdirSync, realpathSync } from "node:fs";
 
 import {
   findWorkspace,
@@ -31,9 +31,13 @@ import {
   worktreePathFor,
   type ListedWorkspace,
 } from "./task-utils.mts";
-import { isInside, parseWorktreeList } from "./worktree-utils.mts";
+import {
+  isInside,
+  packageManagerFromLockfiles,
+  parseWorktreeList,
+} from "./worktree-utils.mts";
 
-const USAGE = "Usage:\n  {{PKG_MANAGER}} run task:finish -- <name>";
+const USAGE = "Usage:\n  task:finish -- <name>";
 
 function fail(message: string): never {
   console.error(`\n✗ ${message}\n`);
@@ -67,6 +71,7 @@ const worktrees = parseWorktreeList(
 );
 const mainCheckout = realpathSync(worktrees[0].path);
 const target = worktreePathFor(mainCheckout, name);
+const pkg = packageManagerFromLockfiles(readdirSync(mainCheckout));
 
 // ---------------------------------------------------------------------------
 // Guards — both BEFORE anything is removed or closed
@@ -77,7 +82,7 @@ if (existsSync(target) && isInside(cwd, realpathSync(target))) {
   fail(
     `you are inside ${target}, the worktree this would remove.\n` +
       `  Run it from the main checkout instead:\n\n` +
-      `    cd ${mainCheckout} && {{PKG_MANAGER}} run task:finish -- ${name}`,
+      `    cd ${mainCheckout} && ${pkg} run task:finish -- ${name}`,
   );
 }
 
@@ -119,9 +124,9 @@ if (match !== null && match.kind === "one") {
 // ---------------------------------------------------------------------------
 
 if (existsSync(target)) {
-  console.log(`• {{PKG_MANAGER}} run worktree:teardown -- ${target}\n`);
+  console.log(`• ${pkg} run worktree:teardown -- ${target}\n`);
   try {
-    execFileSync("{{PKG_MANAGER}}", ["run", "worktree:teardown", "--", target], {
+    execFileSync(pkg, ["run", "worktree:teardown", "--", target], {
       cwd: mainCheckout,
       stdio: "inherit",
     });

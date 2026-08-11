@@ -1,7 +1,7 @@
 /**
  * Start a task in one command: worktree, provisioned, in its own workspace.
  *
- *   {{PKG_MANAGER}} run task:start -- <name> <branch>
+ *   <pkg-manager> run task:start -- <name> <branch>
  *
  * Three steps that were four manual ones (`git worktree add`, `cd`,
  * `worktree:setup`, then set up a terminal by hand). Four steps repeated
@@ -20,7 +20,7 @@
  * Imports nothing but node builtins and the pure module beside it.
  */
 import { execFileSync } from "node:child_process";
-import { existsSync, realpathSync } from "node:fs";
+import { existsSync, readdirSync, realpathSync } from "node:fs";
 import path from "node:path";
 
 import {
@@ -33,11 +33,14 @@ import {
   type ListedGroup,
   type ListedWorkspace,
 } from "./task-utils.mts";
-import { parseWorktreeList } from "./worktree-utils.mts";
+import {
+  packageManagerFromLockfiles,
+  parseWorktreeList,
+} from "./worktree-utils.mts";
 
 const USAGE = [
   "Usage:",
-  "  {{PKG_MANAGER}} run task:start -- <name> <branch>",
+  "  task:start -- <name> <branch>",
   "",
   "  <name>    short handle: the worktree becomes ../<repo>-wt-<name>",
   "            and the workspace, where a workspace manager exists, is called <name>",
@@ -90,12 +93,13 @@ const worktrees = parseWorktreeList(
 );
 const mainCheckout = realpathSync(worktrees[0].path);
 const target = worktreePathFor(mainCheckout, name);
+const pkg = packageManagerFromLockfiles(readdirSync(mainCheckout));
 
 if (existsSync(target)) {
   fail(
     `${target} already exists.\n` +
       "  Pick another name, or retire that one first:\n\n" +
-      `    {{PKG_MANAGER}} run task:finish -- ${name}`,
+      `    ${pkg} run task:finish -- ${name}`,
   );
 }
 
@@ -116,11 +120,24 @@ try {
 // 2. Worktree, cut from the LATEST default branch
 // ---------------------------------------------------------------------------
 
+// origin/HEAD is set on clone but can be missing in old or hand-built
+// clones; `set-head --auto` asks the remote once and records the answer.
 let base: string;
 try {
   base = git(["rev-parse", "--abbrev-ref", "origin/HEAD"]);
 } catch {
-  base = "origin/{{DEFAULT_BRANCH}}";
+  try {
+    execFileSync("git", ["remote", "set-head", "origin", "--auto"], {
+      stdio: "ignore",
+    });
+    base = git(["rev-parse", "--abbrev-ref", "origin/HEAD"]);
+  } catch {
+    fail(
+      "could not determine the default branch: origin/HEAD is unset and\n" +
+        "  `git remote set-head origin --auto` failed (offline?). Run that\n" +
+        "  command yourself once, then retry.",
+    );
+  }
 }
 
 console.log(`• git fetch origin --prune`);
@@ -143,9 +160,9 @@ try {
 // 3. Provision it — the worktree:setup script, not a copy of it
 // ---------------------------------------------------------------------------
 
-console.log("\n• {{PKG_MANAGER}} run worktree:setup\n");
+console.log(`\n• ${pkg} run worktree:setup\n`);
 try {
-  execFileSync("{{PKG_MANAGER}}", ["run", "worktree:setup"], {
+  execFileSync(pkg, ["run", "worktree:setup"], {
     cwd: target,
     stdio: "inherit",
   });
@@ -153,7 +170,7 @@ try {
   fail(
     "worktree:setup failed — its output is above.\n" +
       `  The worktree EXISTS at ${target}; fix the cause and re-run setup there,\n` +
-      `  or remove it with  {{PKG_MANAGER}} run task:finish -- ${name}`,
+      `  or remove it with  ${pkg} run task:finish -- ${name}`,
   );
 }
 
@@ -248,7 +265,7 @@ console.log(
     "  Gate: the exact command line is in AGENTS.md → “Getting to master”.",
     "",
     `  When it lands, from ${path.basename(mainCheckout)}:`,
-    `         {{PKG_MANAGER}} run task:finish -- ${name}`,
+    `         ${pkg} run task:finish -- ${name}`,
     "",
     "  (that supersedes the `worktree:teardown` line printed by setup above —",
     "   task:finish runs it AND closes the workspace, in that order.)",

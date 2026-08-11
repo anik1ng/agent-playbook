@@ -41,6 +41,15 @@ in this page — file it.
   this machine has a notification command, name it HERE and the reviewer will tap you on
   the shoulder after posting a verdict (`review` skill, best-effort, never gates the
   verdict). Example, for cmux: `cmux notify --title "Review #<pr>" --body "VERDICT: …"`.
+  Wire notifications to EVENTS (a verdict landed), never to every tool call: a notify per
+  "ask" against a broad allowlist announces prompts that never come, once per command, for
+  the whole review — a screen of blinking. Pair per-ask announcements only with a narrow
+  allowlist where an ask genuinely waits on you: both or neither.
+- **Approved PR as a background tab**: _(optional, cmux)_ name this here too and the
+  reviewer opens the PR page beside its terminal on `VERDICT: approve` — the approved PR
+  is already in front of you when you switch over:
+  `cmux browser open "<pr-url>" --focus false`. Approve only; a blocker is the author's
+  work, not something to park in a tab.
 - **The local gate** (what CI will run anyway):
 
       {{PKG_MANAGER}} run type-check && {{PKG_MANAGER}} run lint && {{TEST_CMD}}

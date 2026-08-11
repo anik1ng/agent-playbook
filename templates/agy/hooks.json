@@ -1,0 +1,16 @@
+{
+  "reviewer-report-only": {
+    "PreToolUse": [
+      {
+        "matcher": "run_command",
+        "hooks": [
+          {
+            "type": "command",
+            "command": "./guard-reviewer.sh",
+            "timeout": 10
+          }
+        ]
+      }
+    ]
+  }
+}

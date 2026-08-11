@@ -1,7 +1,7 @@
 /**
- * The decisions behind `{{PKG_MANAGER}} run task:start` /
- * `{{PKG_MANAGER}} run task:finish`, pulled out of the scripts so they can
- * be tested without git, a workspace manager or a filesystem.
+ * The decisions behind `task:start` / `task:finish`, pulled out of the
+ * scripts so they can be tested without git, a workspace manager or a
+ * filesystem.
  *
  * Same split as worktree-utils.mts, for the same reason: the caller gathers
  * the facts and passes them in, and the parts worth pinning are the ones that

@@ -1,9 +1,9 @@
 /**
  * Retire a git worktree, or sweep up after the ones nobody retired.
  *
- *   {{PKG_MANAGER}} run worktree:teardown -- <path|name>   # remove that worktree, then judge its branch
- *   {{PKG_MANAGER}} run worktree:teardown -- --disposable <path|name>   # force-remove a DETACHED one
- *   {{PKG_MANAGER}} run worktree:teardown -- --sweep       # report leftovers; delete NO branch
+ *   <pkg-manager> run worktree:teardown -- <path|name>   # remove that worktree, then judge its branch
+ *   <pkg-manager> run worktree:teardown -- --disposable <path|name>   # force-remove a DETACHED one
+ *   <pkg-manager> run worktree:teardown -- --sweep       # report leftovers; delete NO branch
  *
  * cwd must be a checkout that is NOT the target — normally the main one:
  * `git worktree remove` cannot run from inside the directory it removes.
@@ -34,6 +34,7 @@ import {
   classifyReviewWorktree,
   computeOrphans,
   isInside,
+  packageManagerFromLockfiles,
   parseWorktreeList,
   reviewWorktreePr,
   type ListedWorktree,
@@ -42,10 +43,10 @@ import {
 
 const USAGE = [
   "Usage:",
-  "  {{PKG_MANAGER}} run worktree:teardown -- <path|name>   remove that worktree, then judge its branch",
-  "  {{PKG_MANAGER}} run worktree:teardown -- --disposable <path|name>",
-  "                                       force-remove a DETACHED worktree, scratch and all",
-  "  {{PKG_MANAGER}} run worktree:teardown -- --sweep       report leftovers (deletes no branch)",
+  "  worktree:teardown -- <path|name>   remove that worktree, then judge its branch",
+  "  worktree:teardown -- --disposable <path|name>",
+  "                                     force-remove a DETACHED worktree, scratch and all",
+  "  worktree:teardown -- --sweep       report leftovers (deletes no branch)",
 ].join("\n");
 
 function fail(message: string): never {
@@ -94,6 +95,7 @@ const worktrees = parseWorktreeList(
 // The first entry is always the main checkout.
 const [mainCheckout, ...others] = worktrees;
 const cwd = resolvePath(process.cwd());
+const pkg = packageManagerFromLockfiles(readdirSync(mainCheckout.path));
 
 // ---------------------------------------------------------------------------
 // The branch predicate — the one thing standing between a sweep and lost work
@@ -348,7 +350,7 @@ if (values.sweep) {
     for (const { worktree, offer, reason } of reviewLeftovers) {
       console.log(
         offer
-          ? `    {{PKG_MANAGER}} run worktree:teardown -- --disposable ${worktree.path}\n        safe: ${reason}`
+          ? `    ${pkg} run worktree:teardown -- --disposable ${worktree.path}\n        safe: ${reason}`
           : `    ${worktree.path} — KEPT: ${reason}`,
       );
     }
