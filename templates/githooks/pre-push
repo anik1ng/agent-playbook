@@ -55,7 +55,19 @@ has_script() {
   node -e "process.exit(require('./package.json').scripts && require('./package.json').scripts['$1'] ? 0 : 1)" 2>/dev/null
 }
 
-echo "pre-push: static gate (format:check, lint, type-check)..."
+# Name only the checks that actually run: this hook is the same file in a repo
+# with three of these scripts and a repo with one, and a message listing checks
+# that never ran teaches the reader to distrust the message.
+GATE_SCRIPTS=""
+for script in format:check lint type-check; do
+  has_script "$script" && GATE_SCRIPTS="${GATE_SCRIPTS:+$GATE_SCRIPTS, }$script"
+done
+
+if [ -z "$GATE_SCRIPTS" ]; then
+  exit 0
+fi
+
+echo "pre-push: static gate ($GATE_SCRIPTS)..."
 # A loop with an early `return 1`, deliberately, rather than `! a && b && c`:
 # in that form `!` inverts only `a` and lets a red lint or type-check through.
 # The gate must fail if ANY check fails.
@@ -69,7 +81,7 @@ run_gate() {
 }
 
 if ! run_gate; then
-  echo "pre-push: static gate failed — run the formatter, fix lint/type errors, then push again." >&2
+  echo "pre-push: static gate failed ($GATE_SCRIPTS) — fix what the red check reported, then push again." >&2
   echo "pre-push: (emergency override for humans: SKIP_PUSH_GATE=1 git push ...)" >&2
   exit 1
 fi

@@ -55,9 +55,10 @@ jobs:
           node-version-file: .nvmrc
           cache: {{PKG_MANAGER}}
       - run: {{INSTALL_CMD}}
-      # The same three scripts .githooks/pre-push runs. Two gates checking
-      # different things is worse than one — the hook goes green on exactly what
-      # CI is about to reject, and the push it let through is already public.
+      # The same static-gate scripts .githooks/pre-push runs — however many of
+      # them this repo defines. Two gates checking different things is worse
+      # than one — the hook goes green on exactly what CI is about to reject,
+      # and the push it let through is already public.
       # (The order differs from the hook's and may: format:check is first here
       # because it is by far the cheapest, and nothing downstream depends on it.)
       # Adoption (ADOPT.md) DELETES the steps this repo has no script for; a
