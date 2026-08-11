@@ -1,7 +1,7 @@
 /**
- * The decisions behind `{{PKG_MANAGER}} run worktree:setup` /
- * `{{PKG_MANAGER}} run worktree:teardown`, pulled out of the scripts so they
- * can be tested without a git repository, a GitHub token or a filesystem.
+ * The decisions behind `worktree:setup` / `worktree:teardown`, pulled out of
+ * the scripts so they can be tested without a git repository, a GitHub token
+ * or a filesystem.
  *
  * Everything here is pure: the callers gather the facts (git output, `gh`
  * output, directory listings) and pass them in. The scripts stay a thin
@@ -30,6 +30,23 @@ import path from "node:path";
  * (API keys, auth secrets, a DDL/superuser database URL).
  */
 export const ALLOWED_ENV_VARS: readonly string[] = [];
+
+/**
+ * The package manager, judged by which lockfile is present. First match
+ * wins; no lockfile means npm. Detected at RUNTIME, from the directory
+ * listing the caller passes in, so these scripts are byte-identical in
+ * every repository that carries them — a copy needs no rendering and a
+ * sync needs no substitution.
+ */
+export function packageManagerFromLockfiles(
+  fileNames: readonly string[],
+): "pnpm" | "yarn" | "bun" | "npm" {
+  const files = new Set(fileNames);
+  if (files.has("pnpm-lock.yaml")) return "pnpm";
+  if (files.has("yarn.lock")) return "yarn";
+  if (files.has("bun.lock") || files.has("bun.lockb")) return "bun";
+  return "npm";
+}
 
 /** `KEY=value`, optionally `export`-prefixed. Comments and blanks miss. */
 const ASSIGNMENT = /^\s*(?:export\s+)?([A-Za-z_][A-Za-z0-9_]*)\s*=/;

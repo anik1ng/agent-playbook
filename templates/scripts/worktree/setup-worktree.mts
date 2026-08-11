@@ -1,12 +1,12 @@
 /**
  * Provision a fresh git worktree so the gate runs green in it.
  *
- *   git worktree add ../<repo>-wt-<name> -b <type>/<short-name> origin/{{DEFAULT_BRANCH}}
+ *   git worktree add ../<repo>-wt-<name> -b <type>/<short-name> origin/<default-branch>
  *   cd ../<repo>-wt-<name>
- *   {{PKG_MANAGER}} run worktree:setup
+ *   <pkg-manager> run worktree:setup
  *
- * (`{{PKG_MANAGER}} run task:start` does all three in one command — this
- * script is its provisioning half, and stays runnable on its own.)
+ * (`task:start` does all three in one command — this script is its
+ * provisioning half, and stays runnable on its own.)
  *
  * cwd must be the worktree — this script has no arguments and no idea of
  * "the other one". Its counterpart, `worktree:teardown`, runs from the
@@ -26,13 +26,20 @@
  * `node_modules` yet.
  */
 import { execFileSync } from "node:child_process";
-import { existsSync, readFileSync, realpathSync, writeFileSync } from "node:fs";
+import {
+  existsSync,
+  readFileSync,
+  readdirSync,
+  realpathSync,
+  writeFileSync,
+} from "node:fs";
 import path from "node:path";
 
 import {
   ALLOWED_ENV_VARS,
   envKeys,
   filterEnv,
+  packageManagerFromLockfiles,
   parseWorktreeList,
 } from "./worktree-utils.mts";
 
@@ -59,14 +66,15 @@ const worktrees = parseWorktreeList(
 );
 const mainCheckout = realpathSync(worktrees[0].path);
 const repoName = path.basename(mainCheckout);
+const pkg = packageManagerFromLockfiles(readdirSync(here));
 
 if (here === mainCheckout) {
   fail(
     `this is the MAIN checkout (${mainCheckout}), not a worktree.\n\n` +
       "  Create one and run setup inside it:\n\n" +
-      `    git worktree add ../${repoName}-wt-<name> -b <type>/<short-name> origin/{{DEFAULT_BRANCH}}\n` +
+      `    git worktree add ../${repoName}-wt-<name> -b <type>/<short-name> origin/<default-branch>\n` +
       `    cd ../${repoName}-wt-<name>\n` +
-      "    {{PKG_MANAGER}} run worktree:setup",
+      `    ${pkg} run worktree:setup`,
   );
 }
 
@@ -131,11 +139,11 @@ if (ALLOWED_ENV_VARS.length === 0) {
 //    disarmed, not a worktree.)
 // ---------------------------------------------------------------------------
 
-console.log("\n• {{PKG_MANAGER}} install\n");
+console.log(`\n• ${pkg} install\n`);
 try {
-  execFileSync("{{PKG_MANAGER}}", ["install"], { stdio: "inherit" });
+  execFileSync(pkg, ["install"], { stdio: "inherit" });
 } catch {
-  fail("{{PKG_MANAGER}} install failed — its output is above.");
+  fail(`${pkg} install failed — its output is above.`);
 }
 
 // ---------------------------------------------------------------------------
@@ -150,7 +158,7 @@ console.log(
     "  Gate: the exact command line is in AGENTS.md → “Getting to master”.",
     "",
     `  Teardown, from ${mainCheckout}:`,
-    `         {{PKG_MANAGER}} run worktree:teardown -- ${path.basename(here)}`,
+    `         ${pkg} run worktree:teardown -- ${path.basename(here)}`,
     "",
   ].join("\n"),
 );

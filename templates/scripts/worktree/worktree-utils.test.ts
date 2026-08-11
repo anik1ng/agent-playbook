@@ -9,6 +9,7 @@ import {
   envKeys,
   filterEnv,
   isInside,
+  packageManagerFromLockfiles,
   parseWorktreeList,
   reviewWorktreePr,
   type BranchFacts,
@@ -29,6 +30,30 @@ const MAIN_ENV = [
   "MAIL_FROM=App <app@example.com>",
   "",
 ].join("\n");
+
+describe("packageManagerFromLockfiles", () => {
+  test("each lockfile names its manager; bun has two spellings", () => {
+    expect(packageManagerFromLockfiles(["pnpm-lock.yaml", "src"])).toBe("pnpm");
+    expect(packageManagerFromLockfiles(["yarn.lock"])).toBe("yarn");
+    expect(packageManagerFromLockfiles(["bun.lock"])).toBe("bun");
+    expect(packageManagerFromLockfiles(["bun.lockb"])).toBe("bun");
+    expect(packageManagerFromLockfiles(["package-lock.json"])).toBe("npm");
+  });
+
+  test("no lockfile at all falls back to npm, not to a guess", () => {
+    expect(packageManagerFromLockfiles(["package.json", "README.md"])).toBe(
+      "npm",
+    );
+  });
+
+  test("a similarly named file is NOT a lockfile", () => {
+    // The check is exact names, not substrings: a stray backup or a nested
+    // project's file mentioned in a listing must not flip the manager.
+    expect(
+      packageManagerFromLockfiles(["pnpm-lock.yaml.bak", "my-yarn.lock"]),
+    ).toBe("npm");
+  });
+});
 
 describe("ALLOWED_ENV_VARS", () => {
   test("ships EMPTY — every copied variable is an explicit local decision", () => {
