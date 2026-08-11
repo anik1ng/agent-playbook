@@ -45,12 +45,17 @@ from a named, bounded local part, which survives the sync:
   repo's one-time history secret sweep. That line is this repo's evidence and cannot be
   regenerated; keep it, sync everything around it.
 - **`.agents/auto-review.sh`** — carries `{{REVIEW_CMD}}`: the line holding the reviewer
-  CLI command this repo chose at adoption (`templates/scripts/auto-review.sh` in the
-  playbook). That choice was the human's and cannot be re-derived from the repo — keep
-  the rendered command line, sync the skeleton around it, and check the file stayed
-  executable. A repo without the file chose manual reviews: that is a
-  "missing in the repo" row below — OFFER it (it needs ADOPT.md's "Reviewer CLI"
-  detection and a human choice), never install it silently.
+  CLI command this repo chose at adoption. TWO templates can be its source — the
+  headless base (`templates/scripts/auto-review.sh`) or an integration's base (e.g.
+  `templates/scripts/auto-review-workspace.sh`, chosen via `integrations/cmux.md`) —
+  and which one is this repo's is itself a recorded adoption choice: identify the base
+  by the file's own mechanics (a workspace-creating script is the workspace base), diff
+  against THAT base, and never "sync" a repo from one base onto the other — switching
+  bases is a human decision, not drift repair. Within the right base: keep the rendered
+  command line, sync the skeleton around it, and check the file stayed executable. A
+  repo without the file chose manual reviews: that is a "missing in the repo" row
+  below — OFFER it (it needs ADOPT.md's "Reviewer CLI" detection and a human choice),
+  never install it silently.
 - **`.claude/settings.json`** — the template owns exactly two things: the `attribution`
   keys and the `permissions.allow` entry that launches `.agents/auto-review.sh`.
   Everything else in the file — extra allow rules, hooks, whatever the human or their

@@ -47,6 +47,11 @@ step 2 ends with a yes):
 | `skills/review/SKILL.md`      | `.agents/skills/review/SKILL.md`     |
 | `scripts/auto-review.sh`      | `.agents/auto-review.sh` (chmod 755) |
 
+(`scripts/auto-review.sh` is the DEFAULT render base for `.agents/auto-review.sh` —
+headless background reviewer. An integration page from `integrations/` may name an
+alternative base for the same destination, e.g. `scripts/auto-review-workspace.sh` when
+the human wires cmux; the "Local tooling integrations" step in §2 decides which.)
+
 The worktree module, when chosen (all eight files travel together — the tests beside the
 code, `scripts/` because they are wired through `package.json`, not agent config):
 
@@ -305,6 +310,16 @@ command?" Context for the answer, honestly stated:
   will not run until a runner exists (they are the safety net around the DELETE
   decisions).
 - No → skip the whole table; nothing else in the workflow references these files.
+
+**Local tooling integrations** → the playbook's `integrations/` directory, one page per
+tool. For each page there, run its Detect step (e.g. `integrations/cmux.md`: a `cmux`
+binary whose socket answers `ping`). Found → report it and walk the human through that
+page's sockets, each ending in its own question; the page may change which template
+`.agents/auto-review.sh` is rendered from (a "render base" — the `{{REVIEW_CMD}}`
+contract is identical either way), add lines to `docs/RUNBOOK.md`, or extend a reviewer
+CLI's hook config. Not found → skip silently; nothing in the core workflow depends on
+any integration. A tool the human uses that has no page yet is a playbook issue to file,
+not something to improvise.
 
 ## 3. Write the files
 
