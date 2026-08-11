@@ -17,6 +17,11 @@ divergence there is the design working, not drift. If the playbook's template co
 improvement this repo would genuinely want, NAME it to the human and stop; never apply it,
 never fold it into the sync PR.
 
+The corollary binds the PLAYBOOK, not the sync: a synced feature must WORK with an
+untouched RUNBOOK. Behavior ships in Class A code; RUNBOOK only describes it to the
+human. A feature whose on-switch lives in a Class B file arrives disabled in every
+adopted repo — that is a playbook bug, not a repo's configuration task.
+
 **Class A — kept identical to the playbook**: everything else adoption installed — the
 three skills, `pr-hygiene.yml`, `security.yml`, `ci-docs.yml`, the PR template,
 `dependabot.yml`, `.githooks/pre-push`, `.claude/settings.json`, `.agents/auto-review.sh`,

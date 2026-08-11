@@ -26,6 +26,13 @@
 # lands (a poller watches for it, since an interactive session outlives its
 # review), red when the session ends without one. The verdict is ALWAYS the
 # comment — a green status is not an approval.
+#
+# When the verdict lands, THIS script announces it — a desktop notification,
+# and on an approve the PR page as a background tab beside the reviewer's
+# terminal. Here and not in the review skill or docs/RUNBOOK.md, on purpose:
+# this is the one synced file that is already cmux-specific, so the behavior
+# arrives working in every adopted repo with nothing to configure. A synced
+# feature must never depend on a file the sync is forbidden to touch.
 
 PR="$1"
 case "$PR" in
@@ -117,6 +124,35 @@ caller_group_ref() {
 
 WORKSPACE="review #$PR"
 
+# Tell the human, once per head: a desktop notification with the verdict, and
+# — approve only — the PR page as a background tab in the reviewer's own
+# workspace (a blocker is the author's work, not something to park in a tab).
+# Best-effort at every step: no cmux → no announcement, and nothing here ever
+# gates the status or the verdict. The stamp file keeps the poller and the
+# exit path from announcing the same verdict twice.
+announce_verdict() {
+  [ -n "$HEAD_SHA" ] || return 0
+  command -v cmux >/dev/null 2>&1 || return 0
+  SHORT=$(printf '%.7s' "$HEAD_SHA")
+  STAMP="$GIT_COMMON/auto-review-$PR.announced-$SHORT"
+  [ -f "$STAMP" ] && return 0
+  : >"$STAMP"
+  # The VERDICT line of the comment whose Reviewed-by names this head.
+  VERDICT=$(gh pr view "$PR" --json comments --jq '.comments[].body' 2>/dev/null \
+    | awk -v s="head $SHORT" 'index($0, s) {f=1} f && /VERDICT:/ {print; exit}' \
+    | grep -oiE 'VERDICT: *[a-z]+' | tail -1)
+  CMUX_QUIET=1 cmux notify --title "Review #$PR" \
+    --body "${VERDICT:-verdict posted} (head $SHORT)" >/dev/null 2>&1 || true
+  case "$VERDICT" in
+    *[Aa]pprove*)
+      URL=$(gh pr view "$PR" --json url --jq .url 2>/dev/null)
+      if [ -n "$URL" ]; then
+        CMUX_QUIET=1 cmux browser open "$URL" --focus false >/dev/null 2>&1 || true
+      fi
+      ;;
+  esac
+}
+
 # ===========================================================================
 # OUTER: prepare the reviewer's checkout, hand the review to a workspace.
 #
@@ -143,6 +179,10 @@ if [ -z "$AUTO_REVIEW_DETACHED" ]; then
   {
     echo "=== auto-review PR #$PR (head ${HEAD_SHA:-unknown}) launching: $(date -u '+%Y-%m-%dT%H:%M:%SZ') ==="
   } >>"$LOG"
+
+  # Announce stamps are per-head; a new launch means the old heads' stamps
+  # are history.
+  rm -f "$GIT_COMMON/auto-review-$PR.announced-"*
 
   if ! command -v cmux >/dev/null 2>&1 || ! cmux_q ping >/dev/null 2>&1; then
     # No silent fallback to a background run: this script exists because a
@@ -302,6 +342,7 @@ verdict_posted() {
     waited=$((waited + 60))
     if verdict_posted; then
       set_status success "verdict posted for $(printf '%.7s' "$HEAD_SHA") — read it before merging"
+      announce_verdict
       exit 0
     fi
   done
@@ -328,6 +369,7 @@ if [ -n "$HEAD_SHA" ]; then
   SHORT=$(printf '%.7s' "$HEAD_SHA")
   if verdict_posted; then
     set_status success "verdict posted for $SHORT — read it before merging"
+    announce_verdict
   else
     set_status failure "no verdict for $SHORT (exit $STATUS) — see $LOG"
   fi

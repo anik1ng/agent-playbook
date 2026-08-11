@@ -181,15 +181,14 @@ Say plainly which checklist items you could not complete and why, rather than re
 "followed the protocol" over a partial pass. An honest gap is actionable; a false all-clear
 is the one failure mode this whole file exists to prevent.
 
-**Then run the post-verdict actions `docs/RUNBOOK.md` of this repository names, if any.**
-A review may be running in a session the human is not looking at, and a verdict nobody
-notices is a merge that waits for nothing. The RUNBOOK may name a desktop-notification
-command (title like `Review #<pr>`, body like `VERDICT: approve|blocker`), and it may name
-an on-approve action (e.g. opening the PR page as a background tab) — run each exactly as
-that page states it, honoring its conditions (an approve-only action never runs on a
-blocker). Best-effort and always last: these never gate the verdict, and a machine whose
-RUNBOOK names no such command skips this step silently. The comment is the deliverable;
-these are only a tap on the shoulder.
+**The comment is the deliverable — announcements are the launcher's job, not yours.**
+Where this review was started by `.agents/auto-review.sh` (the usual case —
+`AUTO_REVIEW_DETACHED` is set in your environment), that script watches for your comment
+and itself notifies the human and, on an approve, opens the PR page beside its terminal.
+Do not duplicate either. Run manually, the human who invoked you is already watching —
+there is nothing to announce. Only if this repository's `docs/RUNBOOK.md` explicitly
+instructs REVIEWERS to run a post-verdict command do you run it — exactly as written,
+honoring its conditions, best-effort and always last: it never gates the verdict.
 
 Re-review, after the author pushes fixes: post a NEW comment whose `Reviewed-by:` line
 names the new head sha — never edit the old one, so the history shows what was approved
