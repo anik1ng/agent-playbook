@@ -17,9 +17,11 @@
 # The REVIEW_CMD line at the bottom is this repo's ONE local part (the
 # playbook's UPDATE.md keeps it across syncs): the reviewer CLI's command
 # line, rendered at adoption from the CLI's own --help. Its contract:
-# interactive is allowed (real terminal), scoped to the reviewer's worktree,
-# no blanket permission bypass, push/merge/close machine-denied, the model
-# named explicitly (cross-family vs the authoring tool).
+# it passes "$REVIEW_PROMPT" (exported below — the script owns the prompt,
+# the line owns only the CLI, model and flags), interactive is allowed
+# (real terminal), scoped to the reviewer's worktree, no blanket permission
+# bypass, push/merge/close machine-denied, the model named explicitly
+# (cross-family vs the authoring tool).
 #
 # The human watches the PR page, not this terminal: an `auto-review` commit
 # status tracks the run — pending at launch, green when the verdict comment
@@ -323,6 +325,21 @@ fi
 } >>"$LOG"
 
 set_status pending "reviewer running — verdict lands as a PR comment"
+
+# The PROMPT is this script's, not the rendered line's — because it must
+# carry the one fact a reviewer session may never have to hunt for: the
+# absolute path of the repository under review. A session that starts
+# without its workspace attached and is told only "this repository" goes
+# LOOKING for the repo — across the human's home directory, one permission
+# prompt per read, a storm with a lost agent behind it (seejs.app review
+# of PR #29, live). With the path pinned and leaving it forbidden, that
+# failure mode is harmless whatever detached the workspace. This shell
+# runs IN the reviewer worktree (the workspace was created with --cwd), so
+# $PWD is exact. The rendered REVIEW_CMD passes it as "$REVIEW_PROMPT" —
+# prompt fixes reach every adopted repo through an ordinary sync, while
+# the CLI, model and flags stay the repo's local choice.
+REVIEW_PROMPT="You are the independent reviewer for pull request #$PR of the repository at $PWD — that exact directory, already checked out at the PR head. Every file you need is inside it: never read, list or search anywhere outside $PWD. Read $PWD/.agents/skills/review/SKILL.md and follow it exactly. You are the reviewer, not the author: never push, never merge, never close. The deliverable is the verdict COMMENT on the PR — a verdict that stays in this transcript did not happen."
+export REVIEW_PROMPT
 
 # Has a verdict naming this head been posted?
 verdict_posted() {
