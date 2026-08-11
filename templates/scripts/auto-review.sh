@@ -1,5 +1,5 @@
 #!/bin/sh
-# The render base for `.agents/auto-review.sh`. Launched by the `ship` skill
+# The template for `.agents/auto-review.sh`. Launched by the `ship` skill
 # right after a PR is opened or updated: one fresh session of this repo's
 # chosen reviewer CLI follows `.agents/skills/review/SKILL.md` and posts its
 # verdict as a comment on the PR.
