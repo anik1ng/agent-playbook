@@ -136,7 +136,10 @@ because neither half can do the other's job:
   before you merge.
 - Where `.agents/auto-review.sh` is installed, `/ship` starts that reviewer for you — on
   the PR's creation and on every fix push — so your part is only reading the verdict
-  comments. The launcher reports its lifecycle as an **`auto-review` status** in the PR's
+  comments. Expect ONE question per PR: the reviewer's first screen in a fresh
+  `review #<pr>` workspace is a folder-trust prompt (each PR reviews in its own
+  worktree) — answer it there and the review runs unattended. More prompts than that
+  one means something is off, not that you must babysit it. The launcher reports its lifecycle as an **`auto-review` status** in the PR's
   checks list: pending = reviewer running right now, green = verdict comment posted,
   red = reviewer died without posting (the log below says why). A green `auto-review` is
   NOT an approval — it only means the verdict landed; the verdict itself can be a blocker.

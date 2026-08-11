@@ -7,16 +7,31 @@ re-read `--help` before rendering, headless flags churn.
 
 ## The `{{REVIEW_CMD}}` shape
 
-    agy -i "Read .agents/skills/review/SKILL.md in this repository and follow it \
-    exactly to review pull request #$PR. Post the verdict as a comment on that PR — a \
-    verdict that stayed in your transcript did not happen." \
+    agy -i "$REVIEW_PROMPT" \
       --model <the model the human chose> \
-      --sandbox
+      --sandbox \
+      --add-dir "$PWD"
+
+The prompt is NOT written into this line: `auto-review.sh` exports `$REVIEW_PROMPT`,
+carrying the worktree's absolute path and the order to never leave it. That is what stops
+a session that lost its workspace from hunting for the repo across the human's home
+directory — one permission prompt per read (a live failure, seejs.app PR #29's review).
+Owning the prompt in the script also means prompt fixes reach every repo through an
+ordinary sync; this line owns only the CLI, the model and the flags.
 
 `--sandbox` is the reach boundary — never replace it with a blanket
 `--dangerously-skip-permissions`. `--model` is explicit on purpose: a default that flips
 to the author's family silently breaks cross-family review. `-i` is interactive, which is
 correct because `auto-review.sh` runs the session on a visible cmux terminal.
+`--add-dir "$PWD"` names the worktree an allowed directory so reads inside it don't
+prompt — flags churn, re-read `--help` before rendering.
+
+**Expect ONE question per PR**: Antigravity trusts a FOLDER, and each PR reviews in its
+own worktree, so the session's first screen on a new PR is "Do you trust the contents of
+this project?". The human answers it in the `review #<pr>` workspace; the review then
+runs unattended and the answer is remembered for that worktree. That is the machine
+boundary working — anything beyond that one question means the allowlist below is not
+seeded or the prompt lost its path.
 
 ## The hook guard (the second boundary)
 

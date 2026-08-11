@@ -28,7 +28,11 @@ three skills, `pr-hygiene.yml`, `security.yml`, `ci-docs.yml`, the PR template,
 and the worktree module (`scripts/*.mts` + their tests). Compare byte-for-byte; a
 difference is drift to sync — EXCEPT these declared local parts, which always survive:
 
-- `auto-review.sh` — the rendered `REVIEW_CMD` line (this repo's reviewer command).
+- `auto-review.sh` — the rendered `REVIEW_CMD` line (this repo's reviewer command). The
+  LOCAL part is the CLI, the model and the flags — not the prompt: since 2026-08-11 the
+  script exports `$REVIEW_PROMPT` (it pins the worktree path) and the line must pass it.
+  A line still carrying an inline prompt string gets that mechanical rewrite IN the sync
+  PR — swap the quoted prompt for `"$REVIEW_PROMPT"`, change nothing else about it.
 - `security.yml` — the header line recording this repo's one-time secret-sweep date.
 - `settings.json` — everything except the template's two keys (`attribution` and the
   auto-review allow rule); the file was installed by merging, so local content is the
