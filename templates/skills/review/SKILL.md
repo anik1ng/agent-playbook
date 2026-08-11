@@ -181,13 +181,18 @@ Say plainly which checklist items you could not complete and why, rather than re
 "followed the protocol" over a partial pass. An honest gap is actionable; a false all-clear
 is the one failure mode this whole file exists to prevent.
 
-**Then say so on the desktop, if this machine has a way to.** A review may be running in a
+**Then do whatever this machine does with a landed verdict.** A review may be running in a
 session the human is not looking at, and a verdict nobody notices is a merge that waits for
-nothing. After the comment lands, send a desktop notification — IF `docs/RUNBOOK.md` of
-this repository names a command for that (title like `Review #<pr>`, body like
-`VERDICT: approve|blocker`). Best-effort and always last: it never gates the verdict, and a
-machine without such a command skips this step silently. The comment is the deliverable;
-this is only a tap on the shoulder.
+nothing. So after the comment lands, read `docs/RUNBOOK.md` of this repository and run what
+it prescribes for a verdict — commonly a desktop notification (title like `Review #<pr>`,
+body like `VERDICT: approve|blocker`), and sometimes more, such as opening the PR page where
+the human will look for it. Follow what that page names, including anything it makes
+conditional on the verdict being an approve.
+
+This is a socket, not a list: the repo's page owns the commands, this protocol stays
+vendor-neutral, and a machine whose page names nothing skips the step silently. Always last,
+always best-effort — it never gates the verdict, and a command that fails changes nothing.
+The comment is the deliverable.
 
 Re-review, after the author pushes fixes: post a NEW comment whose `Reviewed-by:` line
 names the new head sha — never edit the old one, so the history shows what was approved

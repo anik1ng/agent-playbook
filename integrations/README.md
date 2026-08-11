@@ -17,8 +17,9 @@ The workflow's moving parts were designed with sockets for exactly this:
 | a reviewer CLI's hook config        | add tool-specific announcements (e.g. notify on "ask") |
 
 An integration may NEVER touch: the three skills (`do`/`ship`/`review` are
-vendor-neutral protocol — the `review` skill already carries the "notify if RUNBOOK
-names a command" socket, which is all an integration needs there), `AGENTS.md`'s rules,
+vendor-neutral protocol — the `review` skill already carries the "do what RUNBOOK
+prescribes for a landed verdict" socket, which is all an integration needs there:
+put the commands on that page, never in the skill), `AGENTS.md`'s rules,
 the workflows, the hook. If a tool seems to need a protocol change, that is a playbook
 issue, not an integration.
 

@@ -53,14 +53,29 @@ cmux there is a better shape, and it changes WHICH template the file is rendered
   stall on its first "ask" with nobody to answer. If the human wants a silent fallback,
   they want the headless base and narrower "ask"-free permissions — offer that instead.
 
-## Socket 3 — the verdict tap on the shoulder
+## Socket 3 — what happens when a verdict lands
 
-The `review` skill already says: notify after the verdict comment lands IF
-`docs/RUNBOOK.md` names a command. With cmux detected, fill that RUNBOOK line in:
+The `review` skill already says: after the verdict comment lands, do what
+`docs/RUNBOOK.md` prescribes. With cmux detected, that page gets two lines — the second
+only where socket 2 put reviews in a workspace:
 
     cmux notify --title "Review #<pr>" --body "VERDICT: approve|blocker"
 
-Best-effort, never gates the verdict — that part is the skill's rule, not this page's.
+    # on VERDICT: approve only
+    cmux browser open "<pr-url>" --focus false
+
+The tab lands in the reviewer's OWN workspace: `--workspace` defaults to
+`$CMUX_WORKSPACE_ID`, which for a reviewer session is `review #<pr>`, so an approved PR is
+waiting where the human goes to look at the review. Verified on the first adopter
+(2026-08-11): the focused surface did not move, `cmux browser --surface <ref> url` returned
+the PR URL, and a repeat call answered `placement=reuse` rather than stacking panels. Two
+commands that look equivalent are not — `open -g <url>` is the SYSTEM browser, a different
+window entirely, and the general `cmux open <url>` returned `OK urls=1` while creating no
+browser surface at all.
+
+Approve only, deliberately: a blocker is work for the author, not something to park in a
+tab. Both lines are best-effort and never gate the verdict — that part is the skill's rule,
+not this page's.
 
 ## Socket 4 — announcing a reviewer's "ask" (only with a hook guard)
 
@@ -79,6 +94,6 @@ to summon.
 ## When cmux disappears later
 
 Nothing needs unwiring. Sockets 1 and 4 are runtime probes that degrade silently;
-socket 3 is a line the human deletes from RUNBOOK; socket 2 fails loudly per launch
+socket 3 is two lines the human deletes from RUNBOOK; socket 2 fails loudly per launch
 (that is its contract) — if the disappearance is permanent, re-render
 `.agents/auto-review.sh` from the headless base and re-run the two live probes.
