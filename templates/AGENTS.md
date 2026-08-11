@@ -64,9 +64,24 @@ The cycle, and why it splits across sessions:
   only the spec, the plan and the issue. The spec+plan session never implements: the docs
   are the compression of its context, and a fresh executor reading them is cheaper and
   more reliable than a long session dragging the whole brainstorm behind it.
-- A brainstorm that outgrows its session writes a BRAINSTORM BRIEF —
-  `docs/superpowers/brainstorm-briefs/YYYY-MM-DD-<topic>.md`: confirmed facts, decisions
-  already made, open questions — the input a fresh session turns into the spec.
+- **A brainstorm that outgrows its session hands off as a COMMENT on the seed issue** — a
+  BRAINSTORM BRIEF: confirmed facts, decisions already made, open questions — the input a
+  fresh session turns into the spec. A comment and not a file: sessions do not share
+  uncommitted work (worktrees make that literal), so a draft written in one working copy
+  does not exist for the session that reads it next, and committing a draft spends a whole
+  acceptance cycle on text that becomes a spec an hour later. The channel is already read —
+  `/do` reads the issue AND its comments.
+- **The brief comment opens with `SUPERSEDING` on its own first line, and it OUTRANKS the
+  issue body.** The body is edited down to one line pointing at it. This is the rule for
+  every layer of an issue, not just briefs: where two layers disagree, the one marked
+  `SUPERSEDING` is the live one and the other is history. The rule exists because the
+  failure mode is a repeat offender — a body rewritten while its comments still describe
+  the shape before it, or a plan growing patch banners over text that is already wrong —
+  and each time, the next session reads the stale layer. With the marker there is never a
+  "which one is current" question to answer: one layer says so.
+- **The brief FILE still gets written — by the spec session, inside the spec PR**:
+  `docs/superpowers/brainstorm-briefs/YYYY-MM-DD-<topic>.md`. It is the snapshot the repo
+  keeps, not the channel between sessions.
 - **Every factual claim in a brief or a spec carries its evidence class**:
   `[verified-by-execution]` (a probe or command was RUN and its output seen),
   `[read-in-source]` (inferred from reading code or docs), or `[assumption]`. Hedges do
@@ -92,6 +107,13 @@ The cycle, and why it splits across sessions:
   work that already landed.
 - Rebase onto `origin/{{DEFAULT_BRANCH}}` before opening a PR, and again whenever the
   default branch moves while your PR is open.
+- **Acceptance is serial even when the work is not.** Parallel starts are cheap (worktrees
+  make them free); the human's side did not change — they test one PR at a time from its
+  "How to test by hand" and merge by hand. So when **three or more open PRs are ready to
+  merge** (green CI *and* a reviewer verdict of approve), start no new task until that
+  queue is drained. The threshold counts READY PRs, deliberately, not open ones: a PR
+  waiting on a blocker fix sits in the author's queue, not the human's, and holds
+  nothing up.
 - **Entry point: `/do <n>`** (`.agents/skills/do/SKILL.md`) — the executable form
   of this section plus the kickoff preamble (read this file, read the issue AND its comments,
   run the stage gate from "Specs and plans", branch, implement, ship). The rules stay HERE;

@@ -37,6 +37,10 @@ in this page — file it.
   disarmed and nothing says so.
 - **Dev servers**: only you start/stop them. Agents never do — if a server is behaving oddly,
   restart it yourself after a merge.
+- **Desktop notifications**: _(optional — delete this line, or name the command here)_ if
+  this machine has a notification command, name it HERE and the reviewer will tap you on
+  the shoulder after posting a verdict (`review` skill, best-effort, never gates the
+  verdict). Example, for cmux: `cmux notify --title "Review #<pr>" --body "VERDICT: …"`.
 - **The local gate** (what CI will run anyway):
 
       {{PKG_MANAGER}} run type-check && {{PKG_MANAGER}} run lint && {{TEST_CMD}}
