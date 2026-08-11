@@ -26,7 +26,9 @@ existing setting without showing the exact change and getting a yes.**
 ## 1. What you are installing
 
 Fourteen files plus three symlinks (one file conditional — `auto-review.sh` is installed
-only when the "Reviewer CLI" detection in step 2 ends with the human choosing one):
+only when the "Reviewer CLI" detection in step 2 ends with the human choosing one — and
+one optional MODULE of eight more, installed only when the "Worktree module" detection in
+step 2 ends with a yes):
 
 | Template                      | Destination                          |
 | ----------------------------- | ------------------------------------ |
@@ -44,6 +46,20 @@ only when the "Reviewer CLI" detection in step 2 ends with the human choosing on
 | `skills/ship/SKILL.md`        | `.agents/skills/ship/SKILL.md`       |
 | `skills/review/SKILL.md`      | `.agents/skills/review/SKILL.md`     |
 | `scripts/auto-review.sh`      | `.agents/auto-review.sh` (chmod 755) |
+
+The worktree module, when chosen (all eight files travel together — the tests beside the
+code, `scripts/` because they are wired through `package.json`, not agent config):
+
+| Template (`scripts/worktree/`) | Destination                     |
+| ------------------------------ | ------------------------------- |
+| `worktree-utils.mts`           | `scripts/worktree-utils.mts`    |
+| `worktree-utils.test.ts`       | `scripts/worktree-utils.test.ts`|
+| `setup-worktree.mts`           | `scripts/setup-worktree.mts`    |
+| `teardown-worktree.mts`        | `scripts/teardown-worktree.mts` |
+| `task-utils.mts`               | `scripts/task-utils.mts`        |
+| `task-utils.test.ts`           | `scripts/task-utils.test.ts`    |
+| `start-task.mts`               | `scripts/start-task.mts`        |
+| `finish-task.mts`              | `scripts/finish-task.mts`       |
 
 Then the symlinks — RELATIVE, never absolute, so they survive the repo being cloned to a
 different path: `.claude/skills/<name>` → `../../.agents/skills/<name>`, for each of the
@@ -125,6 +141,18 @@ local-gate command line in `AGENTS.md` ("Getting to master") and `docs/RUNBOOK.m
 `.githooks/pre-push` needs no editing — it looks these scripts up at push time — but tell
 the human: a script added later starts gating in the hook by itself and never reaches CI
 until someone adds the step (the Verify checklist below catches that drift).
+
+Deleting the steps is half the job; the other half is MANDATORY: **inventory what is
+missing and ask, with a recommendation fitted to the stack.** A gate with no linter or
+formatter is thinner than the human probably thinks — an agent-written codebase with no
+`lint` step accumulates exactly the mechanical debt CI exists to refuse. So, for every
+gate script the repo does not define, name a concrete stack-appropriate candidate (for a
+TS repo: `eslint` for `lint`, `prettier` + a `format:check` script; `tsc --noEmit` for
+`type-check`), state the one-line trade-off, and ask ONE question: "install these now, or
+adopt without them?" Install only what the human picks — then re-run this detection so
+the new scripts land in `ci.yml`, the gate line and the hook. If they decline, record the
+gaps in the step-8 summary as accepted, not forgotten — and put "add <tool> to the gate"
+on the checklist in step 6 so the decision has a place to be revisited.
 
 **`.nvmrc`**: `ci.yml` uses `node-version-file: .nvmrc`. If the repo has none, create one
 containing the major version of the local `node -v`, and say you did.
@@ -243,6 +271,41 @@ never an assumption:
   all. The `ship` skill skips the absent script silently; reviews stay manual
   (`/review <n>` in a fresh session), and the summary in step 8 says so.
 
+**Worktree module** → whether to install `scripts/worktree-*.mts`, `task-*.mts` and
+friends (the step-1 module table). This too ends in a question, never an assumption —
+ask: "Do you want parallel tasks in git worktrees, each started and retired in one
+command?" Context for the answer, honestly stated:
+
+- What it buys: `task:start <name> <branch>` cuts a fresh branch from the latest default
+  branch into a sibling worktree, provisions it (filtered `.env` + install), and — where
+  the `cmux` workspace manager is installed and answering — opens a two-pane workspace
+  (agent + shell) beside the caller's. `task:finish <name>` retires it, refusing to
+  delete anything that could hold the only copy of work (dirty trees stop it; branches
+  are deleted only when provably merged or fully pushed). `worktree:teardown --sweep`
+  reports leftovers and never deletes a branch on its own.
+- cmux is optional by construction: without it the scripts do the git half and say so.
+  Detect it (`command -v cmux`) and report what the human will actually get.
+- If yes: install the eight files, then wire `package.json` scripts (ask before touching
+  an existing `scripts` block, per Rule 0):
+
+      "task:start": "node scripts/start-task.mts",
+      "task:finish": "node scripts/finish-task.mts",
+      "worktree:setup": "node scripts/setup-worktree.mts",
+      "worktree:teardown": "node scripts/teardown-worktree.mts"
+
+  (Plain `node` runs `.mts` natively on current LTS; if the repo pins a Node too old for
+  type stripping, say so and wire the repo's own TS runner instead.)
+- Then ask ONE more question: which `.env` variables does the local gate actually read?
+  The answer fills `ALLOWED_ENV_VARS` in `scripts/worktree-utils.mts` — it ships EMPTY,
+  and every key added is a declaration that reviewer worktrees may see that value. Never
+  offer secrets or privileged roles as candidates. "None" is the common and correct
+  answer for repos whose tests inject their own config.
+- The module's two test files run under the repo's test runner where that is vitest or
+  jest; where the repo has neither, install them anyway but say plainly that the tests
+  will not run until a runner exists (they are the safety net around the DELETE
+  decisions).
+- No → skip the whole table; nothing else in the workflow references these files.
+
 ## 3. Write the files
 
 Under Rule 0, render and place everything from the table in step 1, then create the three
@@ -307,9 +370,14 @@ contents — one canonical copy.
 
 Two things stay on your checklist here, because they are not GitHub settings:
 
-- [ ] **Orchestrator setup/teardown** — only if the human develops in git worktrees:
-      per-worktree setup installs deps and provisions that worktree's own disposable test
-      database; the delete script drops it. Write both as `package.json` scripts.
+- [ ] **Per-worktree services** — only if the worktree module went in AND this repo's
+      tests need a service per worktree (a disposable test database, say): extend
+      `scripts/setup-worktree.mts` to provision it and `teardown-worktree.mts` to drop
+      it, recording the decision in `docs/RUNBOOK.md`. The module deliberately ships
+      without this — it is a per-repo trade-off, not a template.
+- [ ] **Gate tools declined at adoption** — one line per tool the human said "not now"
+      to in the static-gate inventory (step 2), so the decision has a place to be
+      revisited instead of a place to be forgotten.
 - [ ] **Fill in `AGENTS.md` over time** — the "Magnet files" list ships with one entry
       (`ci.yml`); add the next the first time two PRs actually collide, not before. Same
       for "Never" and the decision records. A fresh repo carrying 200 lines of someone
@@ -355,12 +423,17 @@ a finding for the human.
 6. **Auto-review, where installed**: `.agents/auto-review.sh` is executable, carries no
    placeholder, and the CLI its rendered command launches resolves in PATH. SKIP with the
    reason where the repo chose manual reviews — that is a valid choice, not a failure.
+7. **Worktree module, where installed**: the four `package.json` scripts exist, and
+   `node scripts/setup-worktree.mts` run from the MAIN checkout refuses with "this is the
+   MAIN checkout" and exit 1 — a refusal that names the right directory proves the script
+   runs, parses, and reads git correctly, with zero side effects. Exit 0 there = FAIL.
+   SKIP where the module was declined.
 
 ## 8. Summarize and offer the first commit
 
 Print, in order: what was written vs what existed and how each conflict was resolved; the
 detected values (branch, package manager, test command, database yes/no, reviewer CLI or
-"reviews stay manual"); the clean-env
+"reviews stay manual", worktree module yes/no and its env allowlist); the clean-env
 build result as something you RAN, with the outcome; which settings were applied and which
 declined; anything left aspirational (no tests, no build, bun). Then offer to commit —
 conventional title, no AI-attribution trailers:

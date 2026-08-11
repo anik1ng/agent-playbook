@@ -1,0 +1,257 @@
+/**
+ * Start a task in one command: worktree, provisioned, in its own workspace.
+ *
+ *   {{PKG_MANAGER}} run task:start -- <name> <branch>
+ *
+ * Three steps that were four manual ones (`git worktree add`, `cd`,
+ * `worktree:setup`, then set up a terminal by hand). Four steps repeated
+ * every single time is the friction that stops parallel work from starting
+ * at all, which is the point of this script.
+ *
+ * It composes, never duplicates: the worktree provisioning is
+ * `worktree:setup` (allowlisted `.env` + install), invoked as a child
+ * process inside the new worktree. Its counterpart is `task:finish`.
+ *
+ * cmux is OPTIONAL. Without it — not installed, or its socket unreachable —
+ * the worktree and its setup still happen, the script says the workspace was
+ * not created, and it exits 0. A machine without cmux still gets the useful
+ * two thirds.
+ *
+ * Imports nothing but node builtins and the pure module beside it.
+ */
+import { execFileSync } from "node:child_process";
+import { existsSync, realpathSync } from "node:fs";
+import path from "node:path";
+
+import {
+  DEFAULT_AGENT_COMMAND,
+  buildLayout,
+  findCallerGroup,
+  findWorkspace,
+  validateTaskName,
+  worktreePathFor,
+  type ListedGroup,
+  type ListedWorkspace,
+} from "./task-utils.mts";
+import { parseWorktreeList } from "./worktree-utils.mts";
+
+const USAGE = [
+  "Usage:",
+  "  {{PKG_MANAGER}} run task:start -- <name> <branch>",
+  "",
+  "  <name>    short handle: the worktree becomes ../<repo>-wt-<name>",
+  "            and the workspace, where a workspace manager exists, is called <name>",
+  "  <branch>  the branch to cut from the default branch, e.g. fix/orphan-links",
+].join("\n");
+
+function fail(message: string): never {
+  console.error(`\n✗ ${message}\n`);
+  process.exit(1);
+}
+
+function git(args: string[]): string {
+  return execFileSync("git", args, { encoding: "utf8" }).trim();
+}
+
+/** cmux, or `null` when this machine has none / its socket is unreachable. */
+function cmux(args: string[]): string | null {
+  try {
+    return execFileSync("cmux", args, {
+      encoding: "utf8",
+      stdio: ["ignore", "pipe", "pipe"],
+      // Suppresses the legacy-alias deprecation notices on stdout.
+      env: { ...process.env, CMUX_QUIET: "1" },
+    }).trim();
+  } catch {
+    return null;
+  }
+}
+
+const [name, branch, ...rest] = process.argv.slice(2);
+if (name === undefined || branch === undefined || rest.length > 0) {
+  fail(`exactly two arguments are required.\n\n${USAGE}`);
+}
+
+const nameProblem = validateTaskName(name);
+if (nameProblem !== null) fail(`${nameProblem}.\n\n${USAGE}`);
+
+// ---------------------------------------------------------------------------
+// 1. Where does it go?
+//
+// Always a sibling of the MAIN checkout, even when this runs from inside
+// another worktree — that is the convention `worktree:teardown --sweep` looks
+// in, and a worktree parked elsewhere is invisible to it.
+// ---------------------------------------------------------------------------
+
+const worktrees = parseWorktreeList(
+  execFileSync("git", ["worktree", "list", "--porcelain"], {
+    encoding: "utf8",
+  }),
+);
+const mainCheckout = realpathSync(worktrees[0].path);
+const target = worktreePathFor(mainCheckout, name);
+
+if (existsSync(target)) {
+  fail(
+    `${target} already exists.\n` +
+      "  Pick another name, or retire that one first:\n\n" +
+      `    {{PKG_MANAGER}} run task:finish -- ${name}`,
+  );
+}
+
+// git would refuse this too, but after `fetch` and with a message about refs
+// rather than about what you should do next.
+try {
+  git(["show-ref", "--verify", "--quiet", `refs/heads/${branch}`]);
+  fail(
+    `branch ${branch} already exists locally.\n` +
+      "  Branches are never reused after a merge (AGENTS.md → “Branch discipline”).\n" +
+      "  Pick a new name.",
+  );
+} catch {
+  // Expected: the branch does not exist, which is the only way to proceed.
+}
+
+// ---------------------------------------------------------------------------
+// 2. Worktree, cut from the LATEST default branch
+// ---------------------------------------------------------------------------
+
+let base: string;
+try {
+  base = git(["rev-parse", "--abbrev-ref", "origin/HEAD"]);
+} catch {
+  base = "origin/{{DEFAULT_BRANCH}}";
+}
+
+console.log(`• git fetch origin --prune`);
+try {
+  execFileSync("git", ["fetch", "origin", "--prune"], { stdio: "inherit" });
+} catch {
+  fail("git fetch failed — its output is above.");
+}
+
+console.log(`• git worktree add ${target} -b ${branch} ${base}\n`);
+try {
+  execFileSync("git", ["worktree", "add", target, "-b", branch, base], {
+    stdio: "inherit",
+  });
+} catch {
+  fail("git worktree add failed — its output is above.");
+}
+
+// ---------------------------------------------------------------------------
+// 3. Provision it — the worktree:setup script, not a copy of it
+// ---------------------------------------------------------------------------
+
+console.log("\n• {{PKG_MANAGER}} run worktree:setup\n");
+try {
+  execFileSync("{{PKG_MANAGER}}", ["run", "worktree:setup"], {
+    cwd: target,
+    stdio: "inherit",
+  });
+} catch {
+  fail(
+    "worktree:setup failed — its output is above.\n" +
+      `  The worktree EXISTS at ${target}; fix the cause and re-run setup there,\n` +
+      `  or remove it with  {{PKG_MANAGER}} run task:finish -- ${name}`,
+  );
+}
+
+// ---------------------------------------------------------------------------
+// 4. Workspace — optional, and never fatal
+// ---------------------------------------------------------------------------
+
+const agentCommand = process.env.TASK_AGENT_CMD || DEFAULT_AGENT_COMMAND;
+const listed = cmux(["workspace", "list", "--json"]);
+
+if (listed === null) {
+  console.log(
+    [
+      "",
+      "• workspace NOT created: cmux is unavailable (not installed, or its socket",
+      "  is not answering). The worktree is ready — open it however you like:",
+      "",
+      `    cd ${target}`,
+      "",
+    ].join("\n"),
+  );
+} else {
+  const workspaces = (JSON.parse(listed) as { workspaces: ListedWorkspace[] })
+    .workspaces;
+  const existing = findWorkspace(workspaces, name);
+
+  if (existing.kind !== "none") {
+    // cmux would happily make a second one with the same name, which is how
+    // you end up unable to say which `task:finish` should close.
+    console.log(
+      [
+        "",
+        `• workspace NOT created: one called “${name}” already exists ` +
+          `(${existing.kind === "one" ? existing.ref : existing.refs.join(", ")}).`,
+        "  cmux does not refuse duplicate names — this script does, so that",
+        "  `task:finish` can never guess which one you meant.",
+        "",
+        `    cd ${target}`,
+        "",
+      ].join("\n"),
+    );
+  } else {
+    // Beside the caller's own workspaces, not at the bottom of the sidebar.
+    // cmux answers "which group holds this workspace?" only from the group
+    // side, so the caller's ref is matched against each group's members.
+    const identity = cmux(["identify"]);
+    const callerRef =
+      identity === null
+        ? null
+        : ((JSON.parse(identity) as { caller?: { workspace_ref?: string } })
+            .caller?.workspace_ref ?? null);
+    const groupsJson = cmux(["workspace-group", "list", "--json"]);
+    const group =
+      groupsJson === null
+        ? null
+        : findCallerGroup(
+            (JSON.parse(groupsJson) as { groups: ListedGroup[] }).groups,
+            callerRef,
+          );
+
+    const created = cmux([
+      "workspace",
+      "create",
+      "--name",
+      name,
+      "--cwd",
+      target,
+      "--layout",
+      buildLayout(agentCommand),
+      "--focus",
+      "true",
+      ...(group === null ? [] : ["--group", group, "--group-placement", "end"]),
+    ]);
+    if (created === null) {
+      console.log(
+        `\n• workspace NOT created: cmux refused. The worktree is ready at ${target}.\n`,
+      );
+    } else {
+      console.log(
+        `\n• workspace “${name}” created (${created}) — ${agentCommand} + a shell`,
+      );
+    }
+  }
+}
+
+console.log(
+  [
+    "",
+    `✓ ready: ${target}`,
+    `  branch ${branch}, cut from ${base}`,
+    "",
+    "  Gate: the exact command line is in AGENTS.md → “Getting to master”.",
+    "",
+    `  When it lands, from ${path.basename(mainCheckout)}:`,
+    `         {{PKG_MANAGER}} run task:finish -- ${name}`,
+    "",
+    "  (that supersedes the `worktree:teardown` line printed by setup above —",
+    "   task:finish runs it AND closes the workspace, in that order.)",
+    "",
+  ].join("\n"),
+);

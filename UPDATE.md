@@ -33,7 +33,7 @@ divergence. Compare and sync them **byte-for-byte**:
 | `.github/pull_request_template.md`  | `templates/pull_request_template.md`  |
 | `.github/dependabot.yml`            | `templates/dependabot.yml`            |
 
-Five more are Class A with a **declared insertion** — identical to the template apart
+Six more are Class A with a **declared insertion** — identical to the template apart
 from a named, bounded local part, which survives the sync:
 
 - **`.githooks/pre-push`** — carries `{{DEFAULT_BRANCH}}` and `{{PKG_MANAGER}}`.
@@ -59,6 +59,17 @@ from a named, bounded local part, which survives the sync:
   template-owned keys to the playbook's current values (this is how a changed launch
   rule, e.g. dropping a `nohup` prefix, reaches adopted repos) and leave every other
   key and entry untouched. A diff that is only local additions is not a difference.
+- **The worktree module** (`scripts/worktree-utils.mts`, `worktree-utils.test.ts`,
+  `setup-worktree.mts`, `teardown-worktree.mts`, `task-utils.mts`, `task-utils.test.ts`,
+  `start-task.mts`, `finish-task.mts` ← the playbook's `templates/scripts/worktree/`) —
+  carries `{{PKG_MANAGER}}` and `{{DEFAULT_BRANCH}}`: substitute both from THIS repo and
+  diff the substituted render, like `pre-push`. TWO declared local parts survive the
+  sync: the `ALLOWED_ENV_VARS` list in `worktree-utils.mts` (the repo's own decision
+  about what worktrees may see — never reset it to the template's empty list) and any
+  per-worktree service provisioning the repo added to `setup-worktree.mts` /
+  `teardown-worktree.mts` (an extension ADOPT.md's step-6 checklist explicitly invites).
+  A repo carrying none of these files declined the module: that is a "missing in the
+  repo" row — OFFER it, never install it silently.
 - **`.github/workflows/ci-docs.yml`** — its job `name:` must be byte-identical to the
   `checks` job in THIS repo's `ci.yml` (adoption edits that name when it deletes steps),
   and its `paths:` list is the exact inverse of that file's `paths-ignore:`. Where the

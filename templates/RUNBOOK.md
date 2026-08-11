@@ -45,6 +45,25 @@ in this page — file it.
 
       {{PKG_MANAGER}} run type-check && {{PKG_MANAGER}} run lint && {{TEST_CMD}}
 
+## Worktrees (parallel tasks)
+
+<!-- Customize: DELETE this section if you declined the worktree module at adoption. -->
+
+- **Start a task in its own worktree**: `{{PKG_MANAGER}} run task:start -- <name> <branch>`
+  — cuts `<branch>` from the latest default branch into `../<repo>-wt-<name>`, provisions
+  it (filtered `.env` + install), and opens a two-pane workspace beside yours where cmux
+  is running. Without cmux the worktree is still ready; `cd` into it yourself.
+- **Retire it when the PR lands**: `{{PKG_MANAGER}} run task:finish -- <name>` — removes
+  the worktree, deletes the branch ONLY when that provably loses nothing (merged PR
+  containing the tip, or everything pushed), closes the workspace last. A refusal means
+  uncommitted work is in there — that refusal is the safety net, don't force it.
+- **Tidy up leftovers**: `{{PKG_MANAGER}} run worktree:teardown -- --sweep` — reports
+  stale registrations, stray directories and orphaned branches; prints deletion commands
+  but never deletes a branch itself.
+- **What worktrees may see**: the `.env` allowlist in `scripts/worktree-utils.mts` —
+  ships empty; every key you add becomes visible to every worktree, including a
+  reviewer's. Secrets stay out.
+
 ## Database
 
 <!-- Customize: DELETE this section if the project has no database. -->
