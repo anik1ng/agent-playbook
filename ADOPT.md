@@ -254,7 +254,8 @@ never an assumption:
   hook-layer deny fires even under a blanket permission bypass, which makes it the layer
   that survives a misconfigured launcher. The hook is a tripwire (a regex over the
   rendered command), the sandbox is the boundary; they fail independently, which is the
-  point. If the chosen CLI can scope neither reads nor denies, say so plainly and let the
+  point. For agy this is written out — guard script, hook config and the permission
+  seeding it implies — in `integrations/antigravity.md`; copy its shape for another CLI. If the chosen CLI can scope neither reads nor denies, say so plainly and let the
   human decide whether prose ("the reviewer never pushes" in the `review` skill) is
   enough. Either way the step-8 summary records which posture this repo actually got —
   scoped and machine-denied (one layer or two), or a gap accepted knowingly — and the

@@ -82,6 +82,16 @@ from a named, bounded local part, which survives the sync:
   playbook's version of the rest of the file. Where they do not mirror it, that is a
   finding for the human: the required check hangs on some class of PR either way.
 
+Two more are Class A but **conditional on an integration**, so their absence is a choice
+and not a gap: `.agents/guard-reviewer.sh` and `.agents/hooks.json` (← `templates/agy/`,
+wired by `integrations/antigravity.md`). Where the repo HAS them, sync them like any Class A
+file, with ONE declared insertion: the best-effort announcement an integration may add to
+the guard's non-matching branch (`integrations/cmux.md` socket 4) is that repo's local part
+and survives — everything around it is the template's. Where it does not, do NOT offer
+them: they are one reviewer CLI's hook format, and a repo reviewing with a different CLI
+would be installing a file nothing reads. Say the repo has no hook-layer guard only if the
+human asks what its reviewer posture is.
+
 ### Class B — an update NEVER touches these
 
 `AGENTS.md`, `.github/workflows/ci.yml`, `docs/RUNBOOK.md`.

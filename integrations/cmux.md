@@ -64,9 +64,10 @@ Best-effort, never gates the verdict — that part is the skill's rule, not this
 
 ## Socket 4 — announcing a reviewer's "ask" (only with a hook guard)
 
-Where the chosen reviewer CLI got a hook-layer guard (ADOPT.md's second boundary) and
-runs interactively (socket 2), a machine-layer "ask" waits on a human who may be looking
-elsewhere. Have the hook announce it, best-effort, before answering:
+Where the chosen reviewer CLI got a hook-layer guard (ADOPT.md's second boundary — for agy
+that is `integrations/antigravity.md` socket 2, which ships the guard as a template) and it
+runs interactively (socket 2 here), a machine-layer "ask" waits on a human who may be
+looking elsewhere. Have the hook announce it, best-effort, before answering:
 
     CMUX_QUIET=1 cmux notify --title "Reviewer is waiting" \
       --body "A tool call needs your approval in this workspace." >/dev/null 2>&1 || true
