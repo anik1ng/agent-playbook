@@ -196,23 +196,49 @@ never an assumption:
 - Render `{{REVIEW_CMD}}` from the chosen CLI's OWN `--help`, not from memory or guides —
   headless flags churn. The rendered line must reference `"$PR"` (the script's variable),
   run non-interactive/headless, instruct the CLI to read `.agents/skills/review/SKILL.md`
-  and review PR `#$PR` following it exactly, and carry the model/effort flags the human
-  wants for reviews.
-- Permissions, three-sided by design. The headless run needs approvals wide enough for
-  the full protocol (probe tests, mutation runs, the local gate, `gh`) — a soft-denied
-  tool does not stop the review, it silently hollows it into read-only. But "wide" is a
-  statement about TOOLS, never about REACH: scope the run to this repository's working
-  copy with whatever the CLI offers (workspace trust, a sandbox flag, an
-  allowed-directories list), and never reach for a blanket permission bypass to get the
-  tools working — a bypass does not widen the toolset, it dissolves the boundary, and a
-  reviewer that can read the filesystem around the repo was granted adoption's
-  convenience, not the protocol's needs. And the irreversible stays machine-denied:
-  configure the CLI's own permission settings to deny `git push`, `gh pr merge` and
-  `gh pr close`. If the chosen CLI cannot scope reads, or has no deny mechanism, say so
-  plainly and let the human decide whether prose ("the reviewer never pushes" in the
-  `review` skill) is enough for them. Either way, the step-8 summary records which
-  posture this repo actually got — scoped and machine-denied, or a gap accepted
-  knowingly — the script's header points future readers at that record.
+  and review PR `#$PR` following it exactly, and **name the model EXPLICITLY** — never
+  lean on the CLI's default: defaults drift with releases, and the cross-family rule
+  silently breaks the day the default flips to the author's family. Same for effort/
+  reasoning flags and a generous headless timeout where the CLI has one (reviews run the
+  gate plus probes; a default sized for chat kills them mid-run).
+- Permissions: the working shape is **allow-broad plus a narrow deny**, and the reason is
+  headless. A headless session has no terminal and nobody watching it — every permission
+  prompt is not a question but a stall, and a soft-denied tool does not stop the review,
+  it silently hollows it into read-only. So: approvals wide enough for the full protocol
+  (probe tests, mutation runs, the local gate, `gh`) granted UP FRONT in the CLI's
+  permission config, with the irreversible machine-denied on top — `git push`,
+  `gh pr merge`, `gh pr close` — in EVERY form the CLI's config distinguishes (e.g. its
+  sandboxed and unsandboxed command variants are separate rules in some CLIs; denying one
+  form leaves the other open). "Wide" is a statement about TOOLS, never about REACH:
+  scope the run to this repository's working copy with whatever the CLI offers
+  (workspace trust, a sandbox flag, an allowed-directories list), and never reach for a
+  blanket permission bypass to get the tools working — a bypass does not widen the
+  toolset, it dissolves the boundary.
+- **Two boundaries where the CLI supports two, and ask the human about both.** The
+  permission config above is one layer. If the CLI also has a hooks mechanism (a
+  pre-tool-use hook that can inspect a command and answer deny), offer a second,
+  independent guard there for the same three commands — the first adopter verified that a
+  hook-layer deny fires even under a blanket permission bypass, which makes it the layer
+  that survives a misconfigured launcher. The hook is a tripwire (a regex over the
+  rendered command), the sandbox is the boundary; they fail independently, which is the
+  point. If the chosen CLI can scope neither reads nor denies, say so plainly and let the
+  human decide whether prose ("the reviewer never pushes" in the `review` skill) is
+  enough. Either way the step-8 summary records which posture this repo actually got —
+  scoped and machine-denied (one layer or two), or a gap accepted knowingly — and the
+  script's header points future readers at that record.
+- **Prove the render by RUNNING it, before declaring it done.** A rendered command that
+  was never executed is an `[assumption]`, and this one fails at the worst time — during
+  the first real `/ship`, headless, invisibly. Two live probes, both cheap:
+  1. A working probe: run the rendered command shape against a harmless prompt (or the
+     repo's smallest real PR) and confirm it starts headless, reads
+     `.agents/skills/review/SKILL.md`, runs a command, calls `gh pr list` — and comes
+     back WITHOUT a single interactive prompt. One stall = the permission config is
+     wrong; fix it, not the protocol.
+  2. A deny probe: instruct the same headless shape to run `git push --dry-run` (and,
+     where a hook guard was installed, `gh pr merge`) and confirm it is REFUSED by the
+     machine layer, not by the model's good manners. A deny you never watched fire is
+     prose with extra steps.
+  Report both probe results in the step-8 summary as `[verified-by-execution]`.
 - No CLI installed, or the human declines → do not install `.agents/auto-review.sh` at
   all. The `ship` skill skips the absent script silently; reviews stay manual
   (`/review <n>` in a fresh session), and the summary in step 8 says so.
