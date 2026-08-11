@@ -33,6 +33,11 @@ difference is drift to sync — EXCEPT these declared local parts, which always 
 - `ci-docs.yml` — its job `name:` and `paths:` mirror THIS repo's `ci.yml`. Where they
   mirror it they are correct; where they don't, that is a finding for the human — the
   required check hangs on some class of PR either way.
+- `.agents/guard-reviewer.sh` + `.agents/hooks.json` (← `templates/agy/`) — Class A
+  where the repo HAS them, with one declared insertion: a best-effort notify line the
+  repo may have added to the guard's non-matching branch. Where the repo does NOT have
+  them, never offer them — they are agy's hook format, and a repo reviewing with a
+  different CLI would be installing files nothing reads.
 
 For each file, report one of: **identical** / **differs** (what moved and why the
 playbook moved it) / **missing in the repo** (OFFER it — a new gate is never installed

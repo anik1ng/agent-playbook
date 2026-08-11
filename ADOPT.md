@@ -120,6 +120,10 @@ bypass does not widen the toolset, it dissolves the boundary. Where the CLI also
 pre-tool-use hook, offer it as a second, independent deny layer for the same three
 commands.
 
+**For agy this is all written out** — the ready-made hook guard, the `{{REVIEW_CMD}}`
+shape, and the allowlist seeding (two grant forms, not one) — in `templates/agy/README.md`;
+copy its shape when rendering for another CLI.
+
 **Prove the render by RUNNING it**, and report both probes in the summary as
 `[verified-by-execution]`:
 
