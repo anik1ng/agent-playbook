@@ -144,12 +144,10 @@ silent counts as absent. What cmux changes when present:
   outcome, not a bug to fix with a silent background fallback.
 - **task workspaces**: the worktree module's `task:start` opens a two-pane workspace
   (agent + shell) when cmux answers; without it the git half still works.
-- **the verdict tap**: fill the notification line in `docs/RUNBOOK.md` with
-  `cmux notify --title "Review #<pr>" --body "VERDICT: …"`.
-- **the approve tab**: add to the RUNBOOK's review ritual — on `VERDICT: approve` the
-  reviewer also runs `cmux browser open "<pr-url>" --focus false`, so the approved PR is
-  already open when the human switches over. Approve only; a blocker is the author's
-  work, not something to park in a tab.
+- **verdict announcements are built in**: when the verdict comment lands, the launcher
+  itself sends the desktop notification and, on an approve, opens the PR page as a
+  background tab in the reviewer's workspace. Nothing to wire — behavior ships in the
+  script, and the RUNBOOK only describes it.
 - **What NOT to wire**: per-tool-call "ask" announcements. Against a broad allowlist
   nothing stalls, and a notify per call blinks once per command for the entire review
   (nsarchive#129 learned this live). An announcement is only sane paired with a NARROW
