@@ -7,9 +7,11 @@
 # author — so the "a FRESH session reviews" rule holds; cross-family is a
 # property of which CLI was chosen at adoption.
 #
-# `{{REVIEW_CMD}}` is this repo's one local part (the playbook's UPDATE.md keeps
-# it across syncs): the reviewer CLI's headless command line, rendered at
-# adoption after checking the CLI's own --help. Its contract:
+# The REVIEW_CMD line below is this repo's one local part (the playbook's
+# UPDATE.md keeps it across syncs): the reviewer CLI's headless command line,
+# rendered at adoption after checking the CLI's own --help. This comment names
+# it WITHOUT the template braces on purpose — the rendered script must pass
+# ADOPT.md's "no surviving placeholders" grep. Its contract:
 #
 #   - it references "$PR" (the PR number this script was invoked with);
 #   - it runs the CLI in headless/non-interactive mode with permissions wide
