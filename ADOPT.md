@@ -40,7 +40,7 @@ blocks a direct push.
 | `skills/{do,ship,review}/`   | `.agents/skills/<name>/SKILL.md`                     |
 | `scripts/auto-review.sh`     | `.agents/auto-review.sh` (755; only with a reviewer) |
 | `scripts/worktree/*` (8)     | `scripts/` (only when the worktree module is wanted) |
-| `tooling/*` (4)              | repo root (only the ones "The static gate" installs)  |
+| `tooling/*` (3)              | repo root (only the ones "The static gate" installs)  |
 
 Plus three RELATIVE symlinks: `.claude/skills/<name>` → `../../.agents/skills/<name>`.
 `.agents/` is the vendor-neutral home — Codex/ChatGPT and Antigravity/Gemini read it
@@ -106,7 +106,7 @@ and a recommendation to take it**, one question each, and say what it costs:
 
 | missing script | install | template | the cost, said up front |
 | --- | --- | --- | --- |
-| `format:check` | `prettier` | `templates/tooling/.prettierrc.json`, `.prettierignore` → repo root | one reformat-everything commit; keep it as its own commit so it never hides a real change |
+| `format:check` | `oxfmt` (the standard — see below) | `templates/tooling/.oxfmtrc.json` → repo root | one reformat-everything commit; keep it as its own commit so it never hides a real change |
 | `lint` | `oxlint` + `oxlint-tsgolint` (the standard — see below) | `templates/tooling/.oxlintrc.json` → repo root | type-aware rules surface real errors in existing code on the first run; fixing them is part of this step, not a follow-up |
 | `knip` | `knip` | none — it infers entry points; add `knip.json` only where it guesses wrong | usually finds dead exports and unused dependencies immediately; it is the only one of the three that sees ACROSS files, which neither tsc nor a linter does |
 
@@ -120,12 +120,22 @@ the only requirement is a `tsconfig.json` without options TypeScript 7 removed. 
 `oxlint-tsgolint` and the repo's TypeScript moving roughly together, since the backend
 tracks a TypeScript release.
 
+**The formatter is the same standard's other half**: `oxfmt`, from the same oxc
+toolchain as the linter, with Prettier-compatible output as its stated target — so a
+repo already formatted by Prettier converges with a near-empty diff, and its config
+migrates with `oxfmt --migrate=prettier` instead of being re-decided. There is no
+ignore file to render: it reads `.gitignore` (and a `.prettierignore` where one exists)
+and skips lockfiles natively, which is why the template config's `ignorePatterns`
+ships empty. It formats JSON, CSS and Markdown alongside JS/TS. Note it is pre-1.0 —
+the trade accepted here is formatter-output churn across versions, never correctness,
+because a formatter changes style and nothing else.
+
 `knip` is unaffected by any of this (v6 parses with oxc, not TypeScript's API), and so is
-Prettier — a formatter needs no type checker.
+the formatter — it needs no type checker.
 
 Scripts to add — the names matter, ci.yml and `.githooks/pre-push` both look for exactly
-these: `"format": "prettier --write ."`, `"format:check": "prettier --check ."`,
-`"lint": "oxlint --type-aware"`, `"knip": "knip"`.
+these: `"format": "oxfmt"` (in-place write is its default mode),
+`"format:check": "oxfmt --check"`, `"lint": "oxlint --type-aware"`, `"knip": "knip"`.
 
 Then, whatever the answers:
 

@@ -28,8 +28,10 @@
 //     spread three files, a condition that is always true. They cost real
 //     seconds per run — that is the price of the guarantee, not a regression.
 //   - `eslint-config-prettier` LAST, always. It switches off the stylistic
-//     rules Prettier already owns; anywhere earlier and the two tools argue
-//     over the same lines forever.
+//     rules the formatter owns — the formatter is oxfmt, but its output is
+//     Prettier-compatible, so Prettier's off-switch list is exactly the right
+//     one; anywhere earlier and the two tools argue over the same lines
+//     forever.
 //   - Tests get a narrow relaxation block, because a test legitimately does
 //     what production code must not: stub a partial object, cast a fixture,
 //     assert non-null on something it just constructed. Relaxing those rules
