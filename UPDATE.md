@@ -11,19 +11,29 @@ Fetch fresh, never a stale copy or a partial download of single files:
 
 ## Two classes of file
 
-**Class B — a sync never touches these**: `AGENTS.md`, `.github/workflows/ci.yml`,
-`docs/RUNBOOK.md`. They are rendered once at adoption and then GROW with the repo —
-divergence there is the design working, not drift. If the playbook's template contains an
-improvement this repo would genuinely want, NAME it to the human and stop; never apply it,
-never fold it into the sync PR.
+**Class B — a sync never touches these on its own authority**: `AGENTS.md`,
+`.github/workflows/ci.yml`, `docs/RUNBOOK.md`. They are rendered once at adoption and
+then GROW with the repo — divergence there is the design working, not drift. If the
+playbook's template contains an improvement this repo would genuinely want, NAME it to
+the human and stop; never apply it, never fold it into the sync PR. Two edits — and only
+two — may reach a Class B file from a sync, both defined below and both gated on the
+human's explicit yes: correcting prose that describes the installed machinery falsely,
+and the wiring ADOPT.md's static-gate step performs when its offer is accepted.
 
-One kind of divergence is not the design working and must be reported by NAME, with the
-sentence to fix: where a Class B file DESCRIBES machinery this sync just changed and now
-describes it wrongly. Read the repo's reviewer-protocol and gate prose against the
-`auto-review.sh` and skills you are syncing — a repo whose `AGENTS.md` promises a
-headless background reviewer, or a per-PR checkout, after the script stopped working that
-way is telling every future session something false. It is still the human's file to
-edit; silence about it is the sync's bug, not theirs.
+One kind of divergence is not the design working and gets REPAIRED, not just named:
+where a Class B file DESCRIBES machinery falsely. Read the repo's reviewer-protocol and
+gate prose against the `auto-review.sh`, skills and hooks as they stand AFTER this sync —
+not only against what this sync touched, because stale prose usually outlives the change
+that stranded it by several syncs. A repo whose `AGENTS.md` promises a headless
+background reviewer, or a per-PR checkout, after the script stopped working that way is
+telling every future session something false. Put the exact replacement sentences in the
+report; with the human's yes, apply them in the sync PR, listed per file in the PR body.
+That consent covers CORRECTIONS only — prose contradicting the installed machinery —
+never the improvements of the paragraph above, which stay report-only. (This used to be
+report-only too, with the sentences left for the human to type in: `seejs.app` carried
+the same three stale paragraphs across two syncs, because "the human's file to edit"
+reliably means nobody edits it — the sync writes the sentences anyway, so the human's
+part is the yes, not the typing.)
 
 The corollary binds the PLAYBOOK, not the sync: a synced feature must WORK with an
 untouched RUNBOOK. Behavior ships in Class A code; RUNBOOK only describes it to the
@@ -56,6 +66,11 @@ difference is drift to sync — EXCEPT these declared local parts, which always 
   the rule forbade touching the flags beside it. A repaired shape is reported in the PR
   body like any other change.
 - `security.yml` — the header line recording this repo's one-time secret-sweep date.
+  Where no date is recorded, the sweep has not happened — or was never written down,
+  which reads the same a year later: OFFER to run it now (gitleaks over the full
+  history, in the sync's own worktree) and record the date in the same PR. Report what
+  the sweep finds VERBATIM before recording anything; never invent a date, and if the
+  human says they swept by hand, the date is theirs to supply.
 - `settings.json` — everything except the template's two keys (`attribution` and the
   auto-review allow rule); the file was installed by merging, so local content is the
   design working.
@@ -79,13 +94,22 @@ playbook moved it) / **missing in the repo** (OFFER it — a new gate is never i
 silently; `auto-review.sh` in particular needs ADOPT.md's reviewer detection and a human
 choice) / **present only in the repo** (not yours to delete; report and leave it).
 
-**Then report on the STATIC GATE, every sync.** Two parts, both reports and never edits:
+**Then report on the STATIC GATE, every sync.** Two parts, both reported before anything
+is written; edits happen only on a yes:
 
 - **Gaps.** For each of `format:check`, `lint` and `knip` that `package.json` has no
   script for: say it is missing, say what it would catch that the existing scripts
   cannot, and offer ADOPT.md's "The static gate" step. A gap accepted once is invisible
   forever otherwise — the gate is what stands in for the human reading diffs, and a repo
   can run for months on a third of it with nothing saying so.
+
+  **An accepted offer is executed in THIS sync**, exactly as ADOPT.md writes the step —
+  install, the ready config, fixing what the new tools flag in existing code, the
+  reformat as its own commit — not filed as the human's homework. That step edits
+  `ci.yml`, `ci-docs.yml` and the gate lines in `AGENTS.md` / `docs/RUNBOOK.md` by
+  design: the human's yes to the step IS the consent the Class B protection exists to
+  secure, so "a sync never touches these" is no reason to land the tools with the gate
+  half-wired — a `lint` script that ci.yml never runs is the gap again, one layer down.
 - **Deferrals whose condition may have cleared.** Read `AGENTS.md`'s "Tooling decision
   records". Where one defers a move to the standard (the linter, a TypeScript major) it
   carries the condition that would unblock it — a version, a release, a flag leaving
