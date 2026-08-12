@@ -62,10 +62,25 @@ a spec — two lines and a title is a valid issue; this step is where it grows.
   keyboard. Do NOT wait to be asked for a design conversation; the human writing "needs a
   spec" on the issue is this gate's job outsourced back to them.
 
-**Say the verdict in one line before acting on it** — "Stage gate: small and settled,
-implementing" / "small but there's an open choice: …" / "substantial, this is the
-spec+plan session". Every branch below is silent about itself otherwise, and a session
-that never ran the gate looks exactly like one that ran it and chose to implement.
+**Open the session with a KICKOFF BRIEF before acting** — the verdict plus a few plain
+lines the human can veto at a glance. It is written for the product's owner, not for an
+engineer:
+
+- **The verdict, with its reason** — "Stage gate: small and settled — one PR, approach
+  fixed in the issue" / "small but there's an open choice: …" / "substantial — touches
+  the schema, this is the spec+plan session".
+- **What changes for a USER of the product** — one or two sentences, no file names.
+- **Every product-visible decision you are executing, each with its SOURCE** — "old
+  links keep working (issue body)", "button moves to the header (comment, 2026-08-10)".
+  A decision you cannot source to the human's own words — the issue, its comments, a
+  spec — is by definition an UNMADE one: that is the "small but unsettled" branch below,
+  ask before code. Never list yourself as a source and carry on.
+- **What you are NOT doing** — the nearest thing someone might assume is included.
+
+When every decision has a source, print the brief and continue without waiting — the
+human interrupts if something reads wrong; the brief also anchors the PR body later.
+Every branch below is silent about itself otherwise, and a session that never ran the
+gate looks exactly like one that ran it and chose to implement.
 
 1. **Small and settled** → continue to step 4 and implement. (If the human wrote "no spec
    needed" on the issue, believe them.)
@@ -125,9 +140,18 @@ the human by hand. **Never provision what already exists.** First matching case 
     git status -sb
     git log --oneline origin/$DEFAULT..HEAD
 
-1. **On the default branch** → `git switch -C <type>/<kebab> origin/$DEFAULT`. A dirty tree
-   is fine: `switch -C` carries uncommitted changes onto the new branch (this is the
-   "started hacking on the default branch, now formalize it" case).
+1. **On the default branch, clean tree** → `git switch -C <type>/<kebab> origin/$DEFAULT`.
+
+   **On the default branch, dirty tree** → those uncommitted changes are somebody's work,
+   and `switch -C` would silently carry them onto YOUR branch. One question to the human
+   first: "are these changes yours, for this task?" Yes → switch and carry them (the
+   "started hacking on the default branch, now formalize it" case). No, or no answer to
+   give — another agent may be mid-task in this copy — → do not work here: where the
+   worktree module is installed (`task:start` in package.json), run
+   `<pkg-manager> run task:start -- <short-name> <type>/<kebab>` yourself and tell the
+   human to run `/do <issue>` in the workspace it opens; where it is not, stop and say
+   this working copy is occupied. Two agents in one working copy commit each other's
+   files — that is the failure this question exists to prevent.
 2. **On a non-default branch with no commits beyond `origin/$DEFAULT`** → that is a fresh
    task branch someone else already cut. **Adopt it as-is, whatever it is called.** Branch
    names carry no meaning downstream — the PR title becomes the squash title.

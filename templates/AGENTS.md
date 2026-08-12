@@ -42,6 +42,17 @@ stage gate decides what it needs next:
 - **Substantial work** (more than one PR, a new entity or subsystem, an architectural
   decision, a schema change — when unsure, it is substantial) → a SPEC first, then a PLAN.
 
+**An issue an agent drafts records as DECIDED only what the human actually said.** Every
+product-visible choice the human did not voice — compatibility, what users of the product
+keep or lose, a behavior change — goes into the issue body as an open question on its own
+line (`Open: do existing links keep working?`), never as a settled sentence. The stage
+gate treats an `Open:` line as an unmade decision and asks before code. This rule exists
+because the leak is real: an agent drafting an issue out of a conversation once wrote
+"keep decoding the legacy format" into it as a fact, the human never said it, and two
+days later a `/do` session executed it as law — every gate downstream worked correctly,
+and a decision nobody made still shipped. Decisions enter this pipeline through the
+human's words or not at all.
+
 The cycle:
 
 - **Spec and plan are written in ONE session, by the strongest tier available** (see
