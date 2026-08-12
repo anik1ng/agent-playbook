@@ -25,6 +25,14 @@
 # The `gh api` pattern covers the REST routes behind the two `gh pr` commands
 # (`…/pulls/N/merge`, and `-f state=closed` for a close).
 #
+# The git pattern tolerates OPTIONS BETWEEN `git` and `push`, including the
+# ones that take a separate argument — `git -C <dir> push`, `git -c k=v push`.
+# It used to allow only single-token flags, so the argument after `-C` broke
+# the chain and the commonest rewrite of a blocked command walked straight
+# through the tripwire (found by seejs.app's sync, verified here). Options
+# only: a bare word after `git` ends the match, which is what keeps
+# `git log --grep=push` an ordinary read.
+#
 # Do NOT add a per-ask notification here unless agy's allowlist is NARROW:
 # against a broad allow (command(*)/unsandboxed(*)) nothing ever stalls, and a
 # notify per tool call announces prompts that never come — once per command,
@@ -34,7 +42,7 @@
 
 payload=$(cat)
 
-if printf '%s' "$payload" | grep -qE '(^|[^[:alnum:]_.-])git[[:space:]]+(-[^[:space:]]+[[:space:]]+)*push|(^|[^[:alnum:]_.-])gh[[:space:]]+pr[[:space:]]+(merge|close)|(^|[^[:alnum:]_.-])gh[[:space:]]+api[^|;&]*(merge|state=closed)'; then
+if printf '%s' "$payload" | grep -qE '(^|[^[:alnum:]_.-])git([[:space:]]+-[^[:space:]]+([[:space:]]+[^[:space:]-][^[:space:]]*)?)*[[:space:]]+push|(^|[^[:alnum:]_.-])gh[[:space:]]+pr[[:space:]]+(merge|close)|(^|[^[:alnum:]_.-])gh[[:space:]]+api[^|;&]*(merge|state=closed)'; then
   printf '{"decision":"deny","reason":"Reviewer sessions are report-only: git push / gh pr merge / gh pr close are blocked by .agents/hooks.json (AGENTS.md, Reviewer protocol)."}'
 else
   printf '{"decision":"ask"}'
