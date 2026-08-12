@@ -79,6 +79,16 @@ playbook moved it) / **missing in the repo** (OFFER it — a new gate is never i
 silently; `auto-review.sh` in particular needs ADOPT.md's reviewer detection and a human
 choice) / **present only in the repo** (not yours to delete; report and leave it).
 
+**Then name the STATIC GATE's gaps, every sync, in one line each.** For each of
+`format:check`, `lint` and `knip` that `package.json` has no script for: say it is
+missing, say what it would catch that the existing scripts cannot, and offer ADOPT.md's
+"The static gate" step. This is not drift — the repo may have declined it — so it is a
+report, never an edit, and a decline already recorded in `AGENTS.md` gets one line
+("declined at adoption, still declined") rather than a fresh argument. It is repeated
+because a gap accepted once is invisible forever otherwise: the gate is what stands in
+for the human reading diffs, and a repo can run for months on a third of it without
+anything saying so.
+
 ## Apply
 
 Show the human the per-file summary BEFORE writing anything — writing first makes the
