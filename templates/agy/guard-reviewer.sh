@@ -25,6 +25,20 @@
 # The `gh api` pattern covers the REST routes behind the two `gh pr` commands
 # (`…/pulls/N/merge`, and `-f state=closed` for a close).
 #
+# Every pattern must sit at a COMMAND POSITION — the start of the payload, a
+# quote, or a shell operator (`&& | ; ( {`), optional whitespace after it.
+# This is what separates a command from PROSE, without parsing the payload:
+# the hook is handed a JSON blob whose shape is the CLI's business and can
+# carry more than the command line — context, a file it just read, the
+# model's own reasoning. Matching the blob as flat text made
+# `node scripts/setup-worktree.mts` deny because a sentence nearby said the
+# reviewer must never `git push` (seejs.app, live: the identical command
+# answered deny once and ask a minute later, the only difference being what
+# else rode along). A tripwire that fires on the word teaches the session to
+# reword its command until it passes, which is worse than not having one.
+# `never git push` in prose is preceded by a word, so it no longer fires;
+# `npm test && git push` is preceded by an operator, so it still does.
+#
 # The git pattern tolerates OPTIONS BETWEEN `git` and `push`, including the
 # ones that take a separate argument — `git -C <dir> push`, `git -c k=v push`.
 # It used to allow only single-token flags, so the argument after `-C` broke
@@ -42,7 +56,7 @@
 
 payload=$(cat)
 
-if printf '%s' "$payload" | grep -qE '(^|[^[:alnum:]_.-])git([[:space:]]+-[^[:space:]]+([[:space:]]+[^[:space:]-][^[:space:]]*)?)*[[:space:]]+push|(^|[^[:alnum:]_.-])gh[[:space:]]+pr[[:space:]]+(merge|close)|(^|[^[:alnum:]_.-])gh[[:space:]]+api[^|;&]*(merge|state=closed)'; then
+if printf '%s' "$payload" | grep -qE '(^|["'"'"'`&|;({]|\\n)[[:space:]]*(git([[:space:]]+-[^[:space:]]+([[:space:]]+[^[:space:]-][^[:space:]]*)?)*[[:space:]]+push|gh[[:space:]]+pr[[:space:]]+(merge|close)|gh[[:space:]]+api[^|;&]*(merge|state=closed))'; then
   printf '{"decision":"deny","reason":"Reviewer sessions are report-only: git push / gh pr merge / gh pr close are blocked by .agents/hooks.json (AGENTS.md, Reviewer protocol)."}'
 else
   printf '{"decision":"ask"}'
