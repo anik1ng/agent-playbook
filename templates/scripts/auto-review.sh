@@ -5,9 +5,21 @@
 # verdict as a comment on the PR.
 #
 # The review runs on a VISIBLE terminal in a cmux workspace named
-# `review #<pr>`, beside the author's workspaces, in its own worktree
-# detached on the PR head (`<repo>-wt-review-<pr>`, reused across fix
-# pushes). Visible on purpose: where the reviewer CLI's machine layer
+# `review #<pr>`, beside the author's workspaces, in ONE reviewer worktree
+# per repository (`<repo>-wt-review`) — detached, and reset to the PR head
+# at the moment the review actually starts.
+#
+# One worktree and not one per PR, because a reviewer CLI trusts
+# DIRECTORIES: a per-PR path asked the human "do you trust this folder?" on
+# every single PR, forever, which is the exact opposite of an unattended
+# review (seejs.app, six PRs in a row). The price is that reviews SERIALISE
+# — a second PR's review waits on a lock and says "queued behind #N" in its
+# `auto-review` status until the running one finishes. Waiting, not
+# superseding: both verdicts are wanted, and a reviewer whose tree is reset
+# mid-read files a verdict about a diff that no longer exists. Preemption
+# still applies WITHIN one PR (a fix push replaces that PR's own review).
+#
+# Visible on purpose: where the reviewer CLI's machine layer
 # answers "ask" for a tool, the human on this terminal is who answers.
 # No cmux at launch → no review starts and the `auto-review` status goes
 # red saying to run /review by hand. There is deliberately no silent
@@ -155,8 +167,27 @@ announce_verdict() {
   esac
 }
 
+# The paths both halves need. `git worktree list` reports the MAIN checkout
+# first from anywhere inside the repository — including from the reviewer's
+# own worktree, which is where the inner half runs.
+MAIN=$(git worktree list --porcelain | sed -n '1s/^worktree //p')
+REPO_NAME=$(basename "$MAIN")
+WORKTREE="$(dirname "$MAIN")/$REPO_NAME-wt-review"
+
+# The package manager, from the main checkout's lockfile — detected at
+# runtime so this file needs no rendering beyond REVIEW_CMD.
+if [ -f "$MAIN/pnpm-lock.yaml" ]; then PKG=pnpm; INSTALL="pnpm install --frozen-lockfile"
+elif [ -f "$MAIN/yarn.lock" ]; then PKG=yarn; INSTALL="yarn install --immutable"
+elif [ -f "$MAIN/bun.lock" ] || [ -f "$MAIN/bun.lockb" ]; then PKG=bun; INSTALL="bun install --frozen-lockfile"
+elif [ -f "$MAIN/package-lock.json" ]; then PKG=npm; INSTALL="npm ci"
+else PKG=npm; INSTALL="npm install"
+fi
+
 # ===========================================================================
-# OUTER: prepare the reviewer's checkout, hand the review to a workspace.
+# OUTER: make sure the reviewer's checkout EXISTS, hand the review to a
+# workspace. It deliberately does not reset or provision that checkout — a
+# review may be running in it right now, and this one may be queued behind
+# it. Both belong to the inner half, behind the lock.
 #
 # Detach here, not in the caller: the ship skill invokes this script plainly,
 # so the launch mechanics are THIS file's business — a machine that runs its
@@ -165,19 +196,6 @@ announce_verdict() {
 # ===========================================================================
 
 if [ -z "$AUTO_REVIEW_DETACHED" ]; then
-  MAIN=$(git worktree list --porcelain | sed -n '1s/^worktree //p')
-  REPO_NAME=$(basename "$MAIN")
-  WORKTREE="$(dirname "$MAIN")/$REPO_NAME-wt-review-$PR"
-
-  # The package manager, from the main checkout's lockfile — detected at
-  # runtime so this file needs no rendering beyond REVIEW_CMD.
-  if [ -f "$MAIN/pnpm-lock.yaml" ]; then PKG=pnpm; INSTALL="pnpm install --frozen-lockfile"
-  elif [ -f "$MAIN/yarn.lock" ]; then PKG=yarn; INSTALL="yarn install --immutable"
-  elif [ -f "$MAIN/bun.lock" ] || [ -f "$MAIN/bun.lockb" ]; then PKG=bun; INSTALL="bun install --frozen-lockfile"
-  elif [ -f "$MAIN/package-lock.json" ]; then PKG=npm; INSTALL="npm ci"
-  else PKG=npm; INSTALL="npm install"
-  fi
-
   {
     echo "=== auto-review PR #$PR (head ${HEAD_SHA:-unknown}) launching: $(date -u '+%Y-%m-%dT%H:%M:%SZ') ==="
   } >>"$LOG"
@@ -203,53 +221,50 @@ if [ -z "$AUTO_REVIEW_DETACHED" ]; then
     exit 1
   fi
 
-  # Say something on the PR page before the slow part: provisioning a fresh
-  # reviewer worktree costs an install.
+  # Say something on the PR page before the slow part: the review may have to
+  # queue, and a first-ever run still pays for a checkout.
   set_status pending "preparing the reviewer's workspace"
 
-  # Retire the reviewer worktrees of PRs that are done. This is the only
-  # moment anything runs on a schedule, so it is where the cleanup lives.
+  # Retire the per-PR reviewer worktrees this script used to create. They are
+  # LEGACY: one stable worktree replaced them, nothing writes a
+  # `-wt-review-<pr>` directory any more, so PR state no longer gates the
+  # sweep — but the removal itself still does.
   #
   # `--disposable`, not the plain teardown: a reviewer leaves scratch files
   # behind (diffs, probe output), and the plain teardown is RIGHT to refuse a
-  # dirty tree — so that path never fires, and every reviewed PR quietly
-  # keeps a full checkout's disk. The flag forces, and the worktree module's
+  # dirty tree. The flag forces, and the worktree module's
   # `classifyDisposable()` gates it on a DETACHED head rather than on the
   # directory's name: a worktree with a branch is somebody's working copy
-  # and is refused, whatever it is called. Without the worktree module the
-  # leftovers are only reported — nothing here force-removes unguarded.
+  # and is refused, whatever it is called. Without the worktree module
+  # nothing here force-removes unguarded — it TELLS the human instead, on a
+  # channel that has a reader. A line in a log file is not a report: two full
+  # checkouts sat in seejs.app for days, announced only to
+  # `.git/auto-review-<pr>.log`, which nothing and nobody opens.
   for dir in "$(dirname "$MAIN")/$REPO_NAME-wt-review-"*; do
     [ -d "$dir" ] || continue
     old=${dir##*"$REPO_NAME-wt-review-"}
     case "$old" in ''|*[!0-9]*) continue ;; esac
-    [ "$old" = "$PR" ] && continue
-    state=$(gh pr view "$old" --json state --jq .state 2>/dev/null)
-    if [ -n "$state" ] && [ "$state" != "OPEN" ]; then
-      if [ -f "$MAIN/scripts/teardown-worktree.mts" ]; then
-        echo "retiring the reviewer worktree of #$old ($state)" >>"$LOG"
-        (cd "$MAIN" && "$PKG" run worktree:teardown -- --disposable "$dir") >>"$LOG" 2>&1 || true
-        ref=$(workspace_ref "review #$old")
-        [ -n "$ref" ] && cmux_q workspace close "$ref" >>"$LOG" 2>&1
-      else
-        echo "leftover reviewer worktree of #$old ($state): $dir — remove it yourself (no worktree module to judge it)" >>"$LOG"
-      fi
+    if [ -f "$MAIN/scripts/teardown-worktree.mts" ]; then
+      echo "retiring the legacy reviewer worktree of #$old" >>"$LOG"
+      (cd "$MAIN" && "$PKG" run worktree:teardown -- --disposable "$dir") >>"$LOG" 2>&1 || true
+      ref=$(workspace_ref "review #$old")
+      [ -n "$ref" ] && cmux_q workspace close "$ref" >>"$LOG" 2>&1
+    else
+      echo "leftover reviewer worktree of #$old: $dir — remove it yourself (no worktree module to judge it)" >>"$LOG"
+      CMUX_QUIET=1 cmux notify --title "auto-review: leftover worktree" \
+        --body "$dir — remove it yourself (no worktree module to judge it)" \
+        >/dev/null 2>&1 || true
     fi
   done
 
-  # The reviewer's checkout is DETACHED on the PR head: the branch itself is
-  # checked out in the author's worktree, and git allows a branch in only one.
-  # It is persistent per PR — a fix push resets it rather than paying the
-  # install again.
-  git fetch origin "pull/$PR/head" >>"$LOG" 2>&1 || \
-    git fetch origin --prune >>"$LOG" 2>&1
-  if [ -d "$WORKTREE" ]; then
-    echo "reusing $WORKTREE — resetting to $HEAD_SHA" >>"$LOG"
-    if ! git -C "$WORKTREE" reset --hard "$HEAD_SHA" >>"$LOG" 2>&1; then
-      echo "auto-review: could not reset $WORKTREE to $HEAD_SHA (see $LOG)" >&2
-      set_status failure "reviewer worktree could not be reset — see the log"
-      exit 1
-    fi
-  else
+  # The reviewer's checkout: ONE per repository, created on first use and
+  # kept. Detached, never carrying a branch — the PR's branch is checked out
+  # in the author's worktree, and git allows a branch in only one. The reset
+  # to THIS PR's head is the inner half's job, after the lock; see there for
+  # why it cannot happen now.
+  if [ ! -d "$WORKTREE" ]; then
+    git fetch origin "pull/$PR/head" >>"$LOG" 2>&1 || \
+      git fetch origin --prune >>"$LOG" 2>&1
     echo "creating $WORKTREE detached at $HEAD_SHA" >>"$LOG"
     if ! git worktree add --detach "$WORKTREE" "$HEAD_SHA" >>"$LOG" 2>&1; then
       echo "auto-review: could not create $WORKTREE (see $LOG)" >&2
@@ -258,31 +273,11 @@ if [ -z "$AUTO_REVIEW_DETACHED" ]; then
     fi
   fi
 
-  # The reviewer runs the local gate, so it needs the same provisioning any
-  # worktree gets: with the worktree module, an allowlisted `.env` (secrets
-  # withheld — this is another vendor's model) plus the install; without it,
-  # the plain install. Skipped when node_modules is already there, which is
-  # every fix push after the first.
-  if [ ! -d "$WORKTREE/node_modules" ]; then
-    echo "provisioning $WORKTREE" >>"$LOG"
-    if [ -f "$MAIN/scripts/setup-worktree.mts" ]; then
-      (cd "$WORKTREE" && "$PKG" run worktree:setup) >>"$LOG" 2>&1 || {
-        echo "auto-review: worktree:setup failed in $WORKTREE (see $LOG)" >&2
-        set_status failure "reviewer worktree could not be provisioned — see the log"
-        exit 1
-      }
-    else
-      (cd "$WORKTREE" && $INSTALL) >>"$LOG" 2>&1 || {
-        echo "auto-review: install failed in $WORKTREE (see $LOG)" >&2
-        set_status failure "reviewer worktree could not be provisioned — see the log"
-        exit 1
-      }
-    fi
-  fi
-
-  # A newer push supersedes a still-running review — its verdict would name a
-  # stale head. Closing the workspace kills its whole process tree, which is
-  # what retires the previous reviewer.
+  # A newer push supersedes this PR's own still-running review — its verdict
+  # would name a stale head. Closing the workspace kills its whole process
+  # tree, which is what retires that reviewer (and releases the lock: the
+  # wait loop below steals a lock whose holder is gone). Only ever this PR's
+  # workspace — another PR's review is a verdict somebody still wants.
   OLD_WS=$(workspace_ref "$WORKSPACE")
   if [ -n "$OLD_WS" ]; then
     echo "superseding the running review ($OLD_WS)" >>"$LOG"
@@ -324,7 +319,105 @@ fi
   echo "=== auto-review PR #$PR (head ${HEAD_SHA:-unknown}) started: $(date -u '+%Y-%m-%dT%H:%M:%SZ') ==="
 } >>"$LOG"
 
+# --- the queue -------------------------------------------------------------
+# One reviewer worktree per repository means one review at a time, so a
+# second PR's review waits here instead of taking the tree away from the
+# running one.
+#
+# `mkdir` is the lock: its create-or-fail is atomic on every POSIX
+# filesystem, and it is portable in a way `flock(1)` is not — macOS ships
+# without that command. The holder writes "<pr> <pid>" inside, which is what
+# lets a waiter tell "someone is reviewing #7" from "someone's workspace was
+# closed mid-review": a holder killed with its cmux workspace never runs its
+# trap, and its pid is gone, so the lock is stolen rather than waited on
+# forever.
+LOCK="$GIT_COMMON/auto-review.lock"
+
+waited=0
+announced=
+while ! mkdir "$LOCK" 2>/dev/null; do
+  holder=$(cat "$LOCK/holder" 2>/dev/null)
+  # Only "<pr> <pid>" counts as a claim. Anything else is a partial write and
+  # falls through to the unclaimed branch below — without this, a one-field
+  # file makes pr and pid the same string, `kill -0` on it can succeed
+  # against an unrelated process, and the queue waits forever.
+  case "$holder" in
+    *[0-9]' '[0-9]*) holder_pr=${holder%% *}; holder_pid=${holder##* } ;;
+    *) holder=; holder_pr=; holder_pid= ;;
+  esac
+  if [ -n "$holder_pid" ] && ! kill -0 "$holder_pid" 2>/dev/null; then
+    echo "stealing the lock from a dead holder (#${holder_pr:-?}, pid $holder_pid)" >>"$LOG"
+    rm -rf "$LOCK"
+    continue
+  fi
+  # A lock with no holder file is a crash between the mkdir and the write.
+  # Give it a minute before deciding that, so a live holder mid-write is
+  # never mistaken for a corpse.
+  if [ -z "$holder" ] && [ "$waited" -ge 60 ]; then
+    echo "stealing an unclaimed lock" >>"$LOG"
+    rm -rf "$LOCK"
+    continue
+  fi
+  # Once per holder, not once per poll: the wait is unbounded, and a status
+  # write every ten seconds is API traffic that says nothing new.
+  if [ "$announced" != "${holder_pr:-?}" ]; then
+    announced=${holder_pr:-?}
+    echo "queued behind the review of #$announced" >>"$LOG"
+    set_status pending "queued behind the review of #$announced"
+  fi
+  sleep 10
+  waited=$((waited + 10))
+done
+printf '%s %s\n' "$PR" "$$" >"$LOCK/holder"
+trap 'rm -rf "$LOCK"' EXIT INT TERM
+
+# The head can move while a review sits in the queue. Review what is there
+# NOW: everything downstream — the status, the verdict match, the
+# announcement — keys off this value, and a queued review that verified the
+# head it was launched with would file a verdict about a diff the PR no
+# longer proposes.
+FRESH_SHA=$(gh pr view "$PR" --json headRefOid --jq .headRefOid 2>/dev/null)
+[ -n "$FRESH_SHA" ] && HEAD_SHA="$FRESH_SHA"
+
 set_status pending "reviewer running — verdict lands as a PR comment"
+
+# Now the tree is this review's alone: point it at the PR head.
+git fetch origin "pull/$PR/head" >>"$LOG" 2>&1 || \
+  git fetch origin --prune >>"$LOG" 2>&1
+echo "resetting $WORKTREE to $HEAD_SHA" >>"$LOG"
+if ! git -C "$WORKTREE" reset --hard "$HEAD_SHA" >>"$LOG" 2>&1; then
+  echo "auto-review: could not reset $WORKTREE to $HEAD_SHA (see $LOG)" >&2
+  set_status failure "reviewer worktree could not be reset — see the log"
+  exit 1
+fi
+# The previous review's scratch. `clean -fd` leaves IGNORED files alone, so
+# node_modules survives and the install below is skipped — which is the point
+# of keeping one worktree. Probe files a repo keeps in an ignored directory
+# survive too; the review skill's own rule (delete probes before the verdict)
+# is what covers those.
+git -C "$WORKTREE" clean -fd >>"$LOG" 2>&1 || true
+
+# The reviewer runs the local gate, so it needs the same provisioning any
+# worktree gets: with the worktree module, an allowlisted `.env` (secrets
+# withheld — this is another vendor's model) plus the install; without it,
+# the plain install. Skipped once the worktree has node_modules, which is
+# every review after the first.
+if [ ! -d "$WORKTREE/node_modules" ]; then
+  echo "provisioning $WORKTREE" >>"$LOG"
+  if [ -f "$MAIN/scripts/setup-worktree.mts" ]; then
+    (cd "$WORKTREE" && "$PKG" run worktree:setup) >>"$LOG" 2>&1 || {
+      echo "auto-review: worktree:setup failed in $WORKTREE (see $LOG)" >&2
+      set_status failure "reviewer worktree could not be provisioned — see the log"
+      exit 1
+    }
+  else
+    (cd "$WORKTREE" && $INSTALL) >>"$LOG" 2>&1 || {
+      echo "auto-review: install failed in $WORKTREE (see $LOG)" >&2
+      set_status failure "reviewer worktree could not be provisioned — see the log"
+      exit 1
+    }
+  fi
+fi
 
 # The PROMPT is this script's, not the rendered line's — because it must
 # carry the one fact a reviewer session may never have to hunt for: the
@@ -353,6 +446,9 @@ verdict_posted() {
 # open), so the status cannot wait for the process to exit: this poller
 # flips it green the moment the verdict comment appears.
 (
+  # This subshell must never release the review's lock: it exits as soon as
+  # the verdict lands, while the reviewer's terminal is still open.
+  trap - EXIT INT TERM
   waited=0
   while [ "$waited" -lt 3600 ]; do
     sleep 60
