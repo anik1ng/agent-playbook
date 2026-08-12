@@ -17,6 +17,14 @@ divergence there is the design working, not drift. If the playbook's template co
 improvement this repo would genuinely want, NAME it to the human and stop; never apply it,
 never fold it into the sync PR.
 
+One kind of divergence is not the design working and must be reported by NAME, with the
+sentence to fix: where a Class B file DESCRIBES machinery this sync just changed and now
+describes it wrongly. Read the repo's reviewer-protocol and gate prose against the
+`auto-review.sh` and skills you are syncing — a repo whose `AGENTS.md` promises a
+headless background reviewer, or a per-PR checkout, after the script stopped working that
+way is telling every future session something false. It is still the human's file to
+edit; silence about it is the sync's bug, not theirs.
+
 The corollary binds the PLAYBOOK, not the sync: a synced feature must WORK with an
 untouched RUNBOOK. Behavior ships in Class A code; RUNBOOK only describes it to the
 human. A feature whose on-switch lives in a Class B file arrives disabled in every
@@ -29,10 +37,24 @@ and the worktree module (`scripts/*.mts` + their tests). Compare byte-for-byte; 
 difference is drift to sync — EXCEPT these declared local parts, which always survive:
 
 - `auto-review.sh` — the rendered `REVIEW_CMD` line (this repo's reviewer command). The
-  LOCAL part is the CLI, the model and the flags — not the prompt: since 2026-08-11 the
-  script exports `$REVIEW_PROMPT` (it pins the worktree path) and the line must pass it.
-  A line still carrying an inline prompt string gets that mechanical rewrite IN the sync
-  PR — swap the quoted prompt for `"$REVIEW_PROMPT"`, change nothing else about it.
+  LOCAL part is WHICH CLI and WHICH MODEL; the line's SHAPE is the playbook's, and a sync
+  repairs it. Check it against the reviewer's page (`templates/agy/README.md` for agy,
+  the equivalent section of `ADOPT.md` for anything else) and fix, in the sync PR, any of:
+
+  - the prompt is inline instead of `"$REVIEW_PROMPT"` (the script exports it and it pins
+    the worktree path);
+  - the reviewer's own directory is not named as an allowed one (`--add-dir "$PWD"` for
+    agy) — without it every read inside the review worktree asks;
+  - the model is implicit — a default that flips to the author's family silently breaks
+    cross-family review;
+  - the run is opened with a blanket permission bypass instead of the CLI's scoping flag.
+
+  Anything else about the line — the CLI, the model name, extra local flags — is the
+  repo's and survives untouched. This paragraph used to say the flags survive too, and
+  that is exactly how a fix could not travel: `--add-dir` was added to the reviewer's page
+  the same day seejs.app synced, its sync PR rewrote the prompt inside that very line, and
+  the rule forbade touching the flags beside it. A repaired shape is reported in the PR
+  body like any other change.
 - `security.yml` — the header line recording this repo's one-time secret-sweep date.
 - `settings.json` — everything except the template's two keys (`attribution` and the
   auto-review allow rule); the file was installed by merging, so local content is the
@@ -45,8 +67,12 @@ difference is drift to sync — EXCEPT these declared local parts, which always 
 - `.agents/guard-reviewer.sh` + `.agents/hooks.json` (← `templates/agy/`) — Class A
   where the repo HAS them, with one declared insertion: a best-effort notify line the
   repo may have added to the guard's non-matching branch. Where the repo does NOT have
-  them, never offer them — they are agy's hook format, and a repo reviewing with a
-  different CLI would be installing files nothing reads.
+  them, the answer depends on WHICH CLI its `REVIEW_CMD` launches: for agy, OFFER them
+  (they are the reviewer's second deny layer, and a repo that skipped the question at
+  adoption is otherwise locked out of it forever — this rule used to say "never offer",
+  and `seejs.app` has run six reviews with the deny list as its only boundary because of
+  it); for any other CLI, never — they are agy's hook format, and nothing else reads
+  them.
 
 For each file, report one of: **identical** / **differs** (what moved and why the
 playbook moved it) / **missing in the repo** (OFFER it — a new gate is never installed

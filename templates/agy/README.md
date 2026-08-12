@@ -26,12 +26,16 @@ correct because `auto-review.sh` runs the session on a visible cmux terminal.
 `--add-dir "$PWD"` names the worktree an allowed directory so reads inside it don't
 prompt — flags churn, re-read `--help` before rendering.
 
-**Expect ONE question per PR**: Antigravity trusts a FOLDER, and each PR reviews in its
-own worktree, so the session's first screen on a new PR is "Do you trust the contents of
-this project?". The human answers it in the `review #<pr>` workspace; the review then
-runs unattended and the answer is remembered for that worktree. That is the machine
-boundary working — anything beyond that one question means the allowlist below is not
-seeded or the prompt lost its path.
+**Expect ONE question, once — not one per PR**: Antigravity trusts a FOLDER, and every
+review of this repository runs in the SAME worktree (`<repo>-wt-review`), so "Do you
+trust the contents of this project?" is answered on the first review and never again.
+`auto-review.sh` keeps one worktree per repository for exactly this reason; a per-PR
+path put that dialog in front of the human on every single PR. **Any prompt after that
+first one is a misconfiguration, not the boundary working** — the allowlist below is
+unseeded, the file grants point at the wrong directory, or `--add-dir` is missing from
+the command. Adopting this into a repo that reviewed with per-PR worktrees leaves stale
+`<repo>-wt-review-<n>` entries in `trustedWorkspaces`; delete them once the directories
+are gone.
 
 ## The hook guard (the second boundary)
 
@@ -51,8 +55,25 @@ a different CLI: they are agy's hook format, and nothing else reads them.
 ## Seeding agy's allowlist — TWO grant forms, not one
 
 `permissions.allow` lives in `~/.gemini/antigravity-cli/settings.json` — a per-MACHINE
-file: ask before writing it and leave a timestamped `.bak`. Rules are prefixes (`git`
-matches `git add`, not `github`) and come in two non-interchangeable forms:
+file: ask before writing it and leave a timestamped `.bak`.
+
+**Enumerate. Never `command(*)`.** A wildcard allow reads like the fast way to stop the
+prompting, and it silently demotes the deny list from "second layer" to "only layer" —
+which a prefix deny list cannot carry. It is a list of three command shapes: `gh api`
+is not one of them, and its REST route merges a PR; nor is an argument-reordered
+`git -C <dir> push`, which does not start with `git push`. seejs.app was adopted with
+`command(*)` + `unsandboxed(*)` and read as correctly configured for six PRs. The
+enumerated list below is the whole point of this section.
+
+The file grants are the other half, and they name the REVIEWER's worktree —
+`read_file(<repo-parent>/<repo>-wt-review)`, and `write_file` on the same path because
+probe tests and the gate write there. **Not the main checkout**: it holds the author's
+uncommitted work, which is the one tree the reviewer must never touch, and it is not
+where the reviewer runs anyway (seejs.app granted exactly that, so every read inside the
+review worktree asked, and a write to the author's copy would not have).
+
+Rules are prefixes (`git` matches `git add`, not `github`) and come in two
+non-interchangeable forms:
 
 | rule             | grants                         | the prompt it silences                        |
 | ---------------- | ------------------------------ | --------------------------------------------- |
