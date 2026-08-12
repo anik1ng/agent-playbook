@@ -26,8 +26,12 @@ gate prose against the `auto-review.sh`, skills and hooks as they stand AFTER th
 not only against what this sync touched, because stale prose usually outlives the change
 that stranded it by several syncs. A repo whose `AGENTS.md` promises a headless
 background reviewer, or a per-PR checkout, after the script stopped working that way is
-telling every future session something false. Put the exact replacement sentences in the
-report; with the human's yes, apply them in the sync PR, listed per file in the PR body.
+telling every future session something false. A file is declared CORRECT by the same
+standard it is declared false — its lines, read fact-by-fact against the machinery, with
+citations ("Verification discipline" below); "describes it correctly" without line
+numbers is the file being skipped, not checked. Put the exact replacement sentences in
+the report; with the human's yes, apply them in the sync PR, listed per file in the PR
+body.
 That consent covers CORRECTIONS only — prose contradicting the installed machinery —
 never the improvements of the paragraph above, which stay report-only. (This used to be
 report-only too, with the sentences left for the human to type in: `seejs.app` carried
@@ -117,6 +121,38 @@ is written; edits happen only on a yes:
   still holds, one line ("deferred at adoption pending X, X has not shipped"); if it has
   cleared, say so and offer ADOPT.md's assessment. A deferral nobody ever re-checks is
   indistinguishable from a repo left behind, and this is the only step that looks.
+
+## Verification discipline (binds every claim in the report)
+
+The failure this section exists for was real: a sync declared `docs/RUNBOOK.md` correct
+while its lines still described a worktree scheme two syncs dead — the file was
+remembered, not read. The rules:
+
+- **Every claim carries its evidence class**, exactly as briefs and specs do:
+  `[verified-by-execution]` or `[read-in-source]`. A verdict may never rest on an
+  assumption. "Identical" is a byte comparison you RAN — name the command once for the
+  whole class; "correct" is lines you READ and cite.
+- **Prose is checked fact-by-fact, never by impression.** First extract from the
+  installed machinery — `auto-review.sh`, the skills, the hooks, the worktree scripts —
+  the list of facts a Class B file could describe: how the reviewer is launched, the
+  worktree scheme and its name, the trust prompt's cadence, serialization, the deny
+  layers, lifecycle status, who retires the worktree, what the gate runs. Then read
+  EVERY Class B file against EVERY fact, citing `file:lines` — for matches exactly as
+  for contradictions. A file that says nothing about a fact is "silent on it", said so;
+  silence is never rounded up to "correct".
+- **Nothing inherits from the last sync.** Prior reports, open or unmerged PR text, and
+  your sense of what was already fixed are not evidence: a proposed fix is not a landed
+  one, and the repo is checked as it stands on its default branch. If an earlier sync's
+  PR never merged, everything it proposed is still broken today.
+- **The report is a fixed form.** Every section appears in every report, in order, even
+  when its content is "nothing found": (1) per-file Class A verdicts, (2) the
+  `REVIEW_CMD` shape check, (3) the Class B fact matrix, (4) static-gate gaps, (5)
+  deferral re-checks, (6) the sweep date, (7) symlinks and `{{...}}` tokens, (8) local
+  fixes to propose upstream. An absent section is indistinguishable from an unchecked
+  one — which is exactly what it usually is.
+- **Last, re-read your own report as its adversary**: every verdict missing its
+  evidence is a hole to go fill before showing the human anything, not a sentence to
+  soften. The human merges without reading diffs; this report is the only witness.
 
 ## Apply
 
