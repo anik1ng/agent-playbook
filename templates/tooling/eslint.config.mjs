@@ -3,6 +3,13 @@
 // version-bound, and a config written for the wrong major fails loudly at the
 // first run rather than quietly.
 //
+// REQUIRES TypeScript < 6.1. typescript-eslint's type-aware rules are built on
+// the compiler's JS API, its peer range stops there, and TypeScript 7 (the Go
+// rewrite) ships without a stable programmatic API — forcing the install past
+// the peer conflict crashes ESLint at startup rather than degrading. A repo on
+// TypeScript 6.1+ gets oxlint with the tsgolint backend instead; see ADOPT.md
+// "The static gate".
+//
 // Rendered ONCE at adoption and then this repo's own file: a sync never
 // overwrites it (ADOPT.md, "The static gate"). Delete what does not apply,
 // add the repo's own rules, and keep the reason next to anything you relax.

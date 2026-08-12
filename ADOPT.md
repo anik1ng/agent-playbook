@@ -40,7 +40,7 @@ blocks a direct push.
 | `skills/{do,ship,review}/`   | `.agents/skills/<name>/SKILL.md`                     |
 | `scripts/auto-review.sh`     | `.agents/auto-review.sh` (755; only with a reviewer) |
 | `scripts/worktree/*` (8)     | `scripts/` (only when the worktree module is wanted) |
-| `tooling/*` (3)              | repo root (only the ones "The static gate" installs)  |
+| `tooling/*` (4)              | repo root (only the ones "The static gate" installs)  |
 
 Plus three RELATIVE symlinks: `.claude/skills/<name>` → `../../.agents/skills/<name>`.
 `.agents/` is the vendor-neutral home — Codex/ChatGPT and Antigravity/Gemini read it
@@ -107,12 +107,32 @@ and a recommendation to take it**, one question each, and say what it costs:
 | missing script | install | template | the cost, said up front |
 | --- | --- | --- | --- |
 | `format:check` | `prettier` | `templates/tooling/.prettierrc.json`, `.prettierignore` → repo root | one reformat-everything commit; keep it as its own commit so it never hides a real change |
-| `lint` | `eslint`, `typescript-eslint`, `eslint-config-prettier`, `@eslint/js` | `templates/tooling/eslint.config.mjs` → repo root | type-aware rules surface real errors in existing code on the first run; fixing them is part of this step, not a follow-up |
-| `knip` | `knip` | none — it infers entry points; add `knip.json` only where it guesses wrong | usually finds dead exports and unused dependencies immediately; it is the only one of the three that sees ACROSS files, which neither tsc nor eslint does |
+| `lint` | the linter the repo's TypeScript ALLOWS — see below | `eslint.config.mjs` or `.oxlintrc.json` → repo root | type-aware rules surface real errors in existing code on the first run; fixing them is part of this step, not a follow-up |
+| `knip` | `knip` | none — it infers entry points; add `knip.json` only where it guesses wrong | usually finds dead exports and unused dependencies immediately; it is the only one of the three that sees ACROSS files, which neither tsc nor a linter does |
+
+**Which linter is not a taste question — read `package.json`'s TypeScript version first.**
+Type-aware rules need a type checker's API, and TypeScript 7 (the Go rewrite, GA July 2026)
+ships without a stable programmatic one:
+
+- **TypeScript ≤ 6.0** → `eslint`, `typescript-eslint`, `eslint-config-prettier`,
+  `@eslint/js`, with `templates/tooling/eslint.config.mjs`. Script: `"lint": "eslint ."`.
+- **TypeScript ≥ 6.1** (including 7.x) → `oxlint` + `oxlint-tsgolint`, with
+  `templates/tooling/.oxlintrc.json`. Script: `"lint": "oxlint --type-aware"`. Its
+  type-aware backend (tsgolint) is built ON TypeScript 7 and carries 59 of
+  typescript-eslint's 61 type-aware rules, so almost nothing is given up. Installing
+  typescript-eslint here is not a judgement call to make: its peer range stops at
+  `<6.1.0`, `npm ci` refuses the install, and forcing it past that crashes ESLint at
+  startup.
+- The tsgolint backend tracks a specific TypeScript release, so keep those two versions
+  moving together, and prefer the tsconfig semantics of the installed TypeScript — options
+  removed in 7 are not honoured.
+
+`knip` is unaffected by that split (v6 parses with oxc rather than TypeScript's API), and
+so is Prettier — a formatter needs no type checker.
 
 Scripts to add — the names matter, ci.yml and `.githooks/pre-push` both look for exactly
-these: `"format": "prettier --write ."`, `"format:check": "prettier --check ."`,
-`"lint": "eslint ."`, `"knip": "knip"`.
+these: `"format": "prettier --write ."`, `"format:check": "prettier --check ."`, the
+`lint` line from the split above, `"knip": "knip"`.
 
 Then, whatever the answers:
 
