@@ -40,6 +40,7 @@ blocks a direct push.
 | `skills/{do,ship,review}/`   | `.agents/skills/<name>/SKILL.md`                     |
 | `scripts/auto-review.sh`     | `.agents/auto-review.sh` (755; only with a reviewer) |
 | `scripts/worktree/*` (8)     | `scripts/` (only when the worktree module is wanted) |
+| `tooling/*` (3)              | repo root (only the ones "The static gate" installs)  |
 
 Plus three RELATIVE symlinks: `.claude/skills/<name>` → `../../.agents/skills/<name>`.
 `.agents/` is the vendor-neutral home — Codex/ChatGPT and Antigravity/Gemini read it
@@ -78,10 +79,8 @@ anything you write.
   doc-only PRs). Apply the same deletions to the gate line in `AGENTS.md` and
   `docs/RUNBOOK.md`. `.nvmrc`: create one from the local `node -v` major if absent —
   ci.yml reads it.
-- **Missing gate tools**: for every gate script the repo lacks, name a stack-appropriate
-  candidate (eslint, prettier + `format:check`, `tsc --noEmit`) and ask ONE question —
-  install now, or adopt without? Record declines in the summary as accepted, not
-  forgotten.
+- **Missing gate tools**: see "The static gate" below — that step installs them, and
+  ci.yml's steps follow from what it lands.
 - **Build-time env**: don't reason about it — RUN the build with every `.env.example`
   variable set to empty (`DATABASE_URL= … run build`; explicitly-empty values survive
   framework env loaders, reproducing a runner with no `.env`). A failure naming a
@@ -92,6 +91,47 @@ anything you write.
   driver dependency), report it and ask; yes → a service container with a health check in
   `{{DB_SERVICE_BLOCK}}` plus a job-level `DATABASE_URL`, which the Build step then
   inherits.
+
+## The static gate (install what is missing — this is the guarantee)
+
+The human does not read diffs. Every promise this workflow makes about quality is
+carried by the gate, so a repo whose gate is `tsc --noEmit` alone is running on a third
+of it: type-check sees no floating promise, no `any` spreading through three files, no
+unused export, no condition that is always true, and no formatting at all. Getting the
+gate complete is not polish to do later — it is the reason the human can merge without
+reading.
+
+So for each of these that the repo has no script for, **offer it with its ready config
+and a recommendation to take it**, one question each, and say what it costs:
+
+| missing script | install | template | the cost, said up front |
+| --- | --- | --- | --- |
+| `format:check` | `prettier` | `templates/tooling/.prettierrc.json`, `.prettierignore` → repo root | one reformat-everything commit; keep it as its own commit so it never hides a real change |
+| `lint` | `eslint`, `typescript-eslint`, `eslint-config-prettier`, `@eslint/js` | `templates/tooling/eslint.config.mjs` → repo root | type-aware rules surface real errors in existing code on the first run; fixing them is part of this step, not a follow-up |
+| `knip` | `knip` | none — it infers entry points; add `knip.json` only where it guesses wrong | usually finds dead exports and unused dependencies immediately; it is the only one of the three that sees ACROSS files, which neither tsc nor eslint does |
+
+Scripts to add — the names matter, ci.yml and `.githooks/pre-push` both look for exactly
+these: `"format": "prettier --write ."`, `"format:check": "prettier --check ."`,
+`"lint": "eslint ."`, `"knip": "knip"`.
+
+Then, whatever the answers:
+
+- **Installed** → keep that step in `ci.yml`, keep its word in the job `name:`, mirror
+  the name byte-for-byte into `ci-docs.yml`, and keep it in the gate line in `AGENTS.md`
+  and `docs/RUNBOOK.md`. The pre-push hook needs nothing: it runs whichever of these
+  scripts exist.
+- **Declined** → delete the step, delete the word from BOTH job names, drop it from both
+  gate lines — and record the decline where it will be seen again: a line in `AGENTS.md`
+  under "Tooling decision records", naming what is missing and why. A decline recorded
+  only in your closing summary is a decision nobody can find a month later, and the
+  repository looks like it never had the option (`seejs.app` ran ten PRs with no linter
+  and no formatter before anyone noticed). `UPDATE.md` re-raises what is missing on every
+  sync — that only works if the answer is in the repo.
+
+These config files are rendered ONCE and then belong to the repo: a sync never overwrites
+them. They carry no `{{...}}` tokens, so "rendering" is copying them and then deleting
+what does not apply — a Tailwind plugin in a repo with no Tailwind, an ignore entry for a
+directory that does not exist.
 
 ## The reviewer (auto-review)
 
@@ -248,8 +288,10 @@ summarized to "all good". A SKIP is not a pass.
          0000000000000000000000000000000000000000 \
          | SKIP_PUSH_GATE=1 sh .githooks/pre-push origin no-such-remote
 
-4. ci.yml's steps match `package.json`'s gate scripts in BOTH directions, and
-   ci-docs.yml's job `name:` is byte-identical to ci.yml's.
+4. ci.yml's steps match `package.json`'s gate scripts in BOTH directions, ci-docs.yml's
+   job `name:` is byte-identical to ci.yml's, and the gate line in `AGENTS.md` and
+   `docs/RUNBOOK.md` lists exactly those scripts — a gate line promising a linter the
+   repo does not have is the version every future session will believe.
 5. Merge settings via `gh api repos/{owner}/{repo}`: squash on, merge/rebase off,
    delete-branch-on-merge on.
 6. Auto-review, where installed: executable, no placeholder, and the CLI its rendered
