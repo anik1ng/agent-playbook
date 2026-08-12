@@ -431,7 +431,7 @@ fi
 # $PWD is exact. The rendered REVIEW_CMD passes it as "$REVIEW_PROMPT" —
 # prompt fixes reach every adopted repo through an ordinary sync, while
 # the CLI, model and flags stay the repo's local choice.
-REVIEW_PROMPT="You are the independent reviewer for pull request #$PR of the repository at $PWD — that exact directory, already checked out at the PR head. Every file you need is inside it: never read, list or search anywhere outside $PWD. Read $PWD/.agents/skills/review/SKILL.md and follow it exactly. You are the reviewer, not the author: never push, never merge, never close. The deliverable is the verdict COMMENT on the PR — a verdict that stays in this transcript did not happen."
+REVIEW_PROMPT="You are the independent reviewer for pull request #$PR of the repository at $PWD — that exact directory, already checked out at the PR head. Every file you need is inside it: never read, list, search or WRITE anywhere outside $PWD — your file grants end at that directory, and one touch outside it (a diff saved to /tmp, a note in \$HOME) stalls the review on a permission prompt. Scratch files — saved diffs, notes, probe output — go under $PWD/tmp/. Read $PWD/.agents/skills/review/SKILL.md and follow it exactly. You are the reviewer, not the author: never push, never merge, never close. The deliverable is the verdict COMMENT on the PR — a verdict that stays in this transcript did not happen."
 export REVIEW_PROMPT
 
 # Has a verdict naming this head been posted?

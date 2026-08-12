@@ -26,6 +26,11 @@ Rules of engagement:
   tree is the whole toolkit. Before executing anything, confirm `git status` is clean
   and HEAD matches the PR's head SHA (`gh pr view <pr> --json headRefOid`); if
   either check fails, review from `gh pr diff` alone and say so in the verdict.
+- Every scratch file you create — a saved `gh pr diff`, notes, probe output — lives
+  INSIDE the working copy (the gitignored `tmp/` where the repo has one), never the
+  system `/tmp` or `$HOME`. An auto-launched reviewer's file grants end at its own
+  worktree: one write outside it stalls the whole review on a permission prompt, with
+  nobody guaranteed to be watching; the same path inside the tree costs nothing.
 - Read the full diff (`gh pr diff <pr>`), the PR body (`gh pr view <pr>`),
   and the issue it implements (`gh issue view <n>`).
 - If your CLI ships a generic diff-review command (Claude Code's `/code-review`), run it
@@ -96,8 +101,8 @@ Checklist, in priority order:
      run finishes — never batch the reverts for the end. You may be in the author's
      working copy, and a reviewer that dies mid-review leaves its mutation sitting in
      code the author ships without reading. Before posting the verdict, confirm the
-     tree matches how you found it: probes deleted, mutations reverted, `git status`
-     as clean as it was at the start.
+     tree matches how you found it: probes deleted, mutations reverted, scratch files
+     removed, `git status` as clean as it was at the start.
    - Run the gate the author claims (AGENTS.md "Getting to master" defines it) plus the
      affected suites. A red gate is itself a blocker.
 6. **Freshness of the base.** Check how far the branch is behind the default branch. A
