@@ -48,7 +48,7 @@ in this page — file it.
   pair only with a NARROW allowlist: both or neither.
 - **The local gate** (what CI will run anyway):
 
-      {{PKG_MANAGER}} run type-check && {{PKG_MANAGER}} run lint && {{TEST_CMD}}
+      {{PKG_MANAGER}} run format:check && {{PKG_MANAGER}} run type-check && {{PKG_MANAGER}} run lint && {{PKG_MANAGER}} run knip && {{TEST_CMD}}
 
 ## Worktrees (parallel tasks)
 

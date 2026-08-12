@@ -71,7 +71,7 @@ anything you write.
   mark the gate line in `AGENTS.md`/`RUNBOOK.md` as aspirational, and say so plainly.
   Never invent a fake passing command.
 - **ci.yml**: keep only the steps whose `package.json` scripts exist (`format:check`,
-  `type-check`, `lint`, `build`, tests) — a step calling a missing script is a hard CI
+  `type-check`, `lint`, `knip`, `build`, tests) — a step calling a missing script is a hard CI
   failure on the human's first run. Delete, don't soften with `--if-present`: a tolerant
   step is green while checking nothing. Update the job `name:` to list the surviving
   steps and mirror it byte-for-byte into `ci-docs.yml`, whose `paths:` must stay the
@@ -108,7 +108,7 @@ and a recommendation to take it**, one question each, and say what it costs:
 | --- | --- | --- | --- |
 | `format:check` | `oxfmt` (the standard — see below) | `templates/tooling/.oxfmtrc.json` → repo root | one reformat-everything commit; keep it as its own commit so it never hides a real change |
 | `lint` | `oxlint` + `oxlint-tsgolint` (the standard — see below) | `templates/tooling/.oxlintrc.json` → repo root | type-aware rules surface real errors in existing code on the first run; fixing them is part of this step, not a follow-up |
-| `knip` | `knip` | none — it infers entry points; add `knip.json` only where it guesses wrong | usually finds dead exports and unused dependencies immediately; it is the only one of the three that sees ACROSS files, which neither tsc nor a linter does |
+| `knip` | `knip` | none — it infers entry points; add `knip.json` only where it guesses wrong | usually finds dead exports and unused dependencies immediately; it is the only one of the three that sees ACROSS files, which neither tsc nor a linter does. Runs in CI only, never the pre-push hook — a mid-work branch legitimately carries a dead export for an hour |
 
 **The linter is ONE standard across every repo, not a per-repo taste**: `oxlint` +
 `oxlint-tsgolint`, with `templates/tooling/.oxlintrc.json` and
@@ -125,8 +125,14 @@ toolchain as the linter, with Prettier-compatible output as its stated target �
 repo already formatted by Prettier converges with a near-empty diff, and its config
 migrates with `oxfmt --migrate=prettier` instead of being re-decided. There is no
 ignore file to render: it reads `.gitignore` (and a `.prettierignore` where one exists)
-and skips lockfiles natively, which is why the template config's `ignorePatterns`
-ships empty. It formats JSON, CSS and Markdown alongside JS/TS. Note it is pre-1.0 —
+and skips lockfiles natively. The template config's `ignorePatterns` ships listing the
+playbook-owned trees (`.agents`, `.claude`, `.githooks`, `.github`, the worktree
+module's `scripts/`) — those files must stay byte-identical to the playbook or every
+later sync reads the formatter's rewrite as drift; skills are Markdown and settings are
+JSON, so oxfmt WOULD rewrite them. Prune entries that don't apply — in particular,
+`scripts/**` guards the worktree module, so a repo that declined the module and keeps
+its own code there should drop that entry rather than leave its own scripts
+unformatted. It formats JSON, CSS and Markdown alongside JS/TS. Note it is pre-1.0 —
 the trade accepted here is formatter-output churn across versions, never correctness,
 because a formatter changes style and nothing else.
 

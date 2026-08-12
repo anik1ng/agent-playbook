@@ -26,7 +26,7 @@ on:
 
 jobs:
   checks:
-    name: checks (format, type-check, lint, build, test)
+    name: checks (format, type-check, lint, knip, build, test)
     runs-on: ubuntu-latest
     timeout-minutes: 5
     steps:

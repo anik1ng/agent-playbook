@@ -135,7 +135,7 @@ here WITH the condition that makes them mandatory. -->
   drift it wins and the skill file is the bug.
 - Run the full local gate before pushing (format with the repo's formatter, never by hand):
 
-      {{PKG_MANAGER}} run type-check && {{PKG_MANAGER}} run lint && {{TEST_CMD}}
+      {{PKG_MANAGER}} run format:check && {{PKG_MANAGER}} run type-check && {{PKG_MANAGER}} run lint && {{PKG_MANAGER}} run knip && {{TEST_CMD}}
 
 - Push your branch and open a PR against `{{DEFAULT_BRANCH}}`:
 

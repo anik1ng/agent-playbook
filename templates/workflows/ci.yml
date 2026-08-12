@@ -38,7 +38,7 @@ concurrency:
 
 jobs:
   checks:
-    name: checks (format, type-check, lint, build, test)
+    name: checks (format, type-check, lint, knip, build, test)
     runs-on: ubuntu-latest
     # Insurance, not a target: GitHub's default is 360 min, so one hung test
     # would burn a large slice of the monthly free-tier quota in one incident.
@@ -56,7 +56,7 @@ jobs:
           cache: {{PKG_MANAGER}}
       - run: {{INSTALL_CMD}}
       # The same static-gate scripts .githooks/pre-push runs — however many of
-      # them this repo defines. Two gates checking different things is worse
+      # them this repo defines — plus knip, which is CI-only (its step says why). Two gates checking different things is worse
       # than one — the hook goes green on exactly what CI is about to reject,
       # and the push it let through is already public.
       # (The order differs from the hook's and may: format:check is first here
@@ -67,6 +67,11 @@ jobs:
       - run: {{PKG_MANAGER}} run format:check
       - run: {{PKG_MANAGER}} run type-check
       - run: {{PKG_MANAGER}} run lint
+      # knip is CI-only, deliberately NOT in the pre-push hook: a mid-work
+      # branch legitimately carries a dead export or an unused dep for an
+      # hour, and a hook that blocks pushing WIP teaches people to bypass
+      # hooks. The PR is where "nothing unused lands" becomes the promise.
+      - run: {{PKG_MANAGER}} run knip
       # Build is a STEP, not its own job. A second runner bills its own spin-up
       # plus GitHub's per-job minute rounding on every single run — ~2 billed
       # minutes for ~40s of work. It sits here, before the test step, so a
