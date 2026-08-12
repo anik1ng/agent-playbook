@@ -107,32 +107,25 @@ and a recommendation to take it**, one question each, and say what it costs:
 | missing script | install | template | the cost, said up front |
 | --- | --- | --- | --- |
 | `format:check` | `prettier` | `templates/tooling/.prettierrc.json`, `.prettierignore` → repo root | one reformat-everything commit; keep it as its own commit so it never hides a real change |
-| `lint` | the linter the repo's TypeScript ALLOWS — see below | `eslint.config.mjs` or `.oxlintrc.json` → repo root | type-aware rules surface real errors in existing code on the first run; fixing them is part of this step, not a follow-up |
+| `lint` | `oxlint` + `oxlint-tsgolint` (the standard — see below) | `templates/tooling/.oxlintrc.json` → repo root | type-aware rules surface real errors in existing code on the first run; fixing them is part of this step, not a follow-up |
 | `knip` | `knip` | none — it infers entry points; add `knip.json` only where it guesses wrong | usually finds dead exports and unused dependencies immediately; it is the only one of the three that sees ACROSS files, which neither tsc nor a linter does |
 
-**Which linter is not a taste question — read `package.json`'s TypeScript version first.**
-Type-aware rules need a type checker's API, and TypeScript 7 (the Go rewrite, GA July 2026)
-ships without a stable programmatic one:
+**The linter is ONE standard across every repo, not a per-repo taste**: `oxlint` +
+`oxlint-tsgolint`, with `templates/tooling/.oxlintrc.json` and
+`"lint": "oxlint --type-aware"`. Its type-aware backend (tsgolint) carries 59 of
+typescript-eslint's 61 type-aware rules, and — the fact that makes one standard possible
+at all — it **bundles typescript-go, so it does not use the repo's `typescript` at all**.
+A repo on TypeScript 6 and a repo on TypeScript 7 get the same linter and the same rules;
+the only requirement is a `tsconfig.json` without options TypeScript 7 removed. Keep
+`oxlint-tsgolint` and the repo's TypeScript moving roughly together, since the backend
+tracks a TypeScript release.
 
-- **TypeScript ≤ 6.0** → `eslint`, `typescript-eslint`, `eslint-config-prettier`,
-  `@eslint/js`, with `templates/tooling/eslint.config.mjs`. Script: `"lint": "eslint ."`.
-- **TypeScript ≥ 6.1** (including 7.x) → `oxlint` + `oxlint-tsgolint`, with
-  `templates/tooling/.oxlintrc.json`. Script: `"lint": "oxlint --type-aware"`. Its
-  type-aware backend (tsgolint) is built ON TypeScript 7 and carries 59 of
-  typescript-eslint's 61 type-aware rules, so almost nothing is given up. Installing
-  typescript-eslint here is not a judgement call to make: its peer range stops at
-  `<6.1.0`, `npm ci` refuses the install, and forcing it past that crashes ESLint at
-  startup.
-- The tsgolint backend tracks a specific TypeScript release, so keep those two versions
-  moving together, and prefer the tsconfig semantics of the installed TypeScript — options
-  removed in 7 are not honoured.
-
-`knip` is unaffected by that split (v6 parses with oxc rather than TypeScript's API), and
-so is Prettier — a formatter needs no type checker.
+`knip` is unaffected by any of this (v6 parses with oxc, not TypeScript's API), and so is
+Prettier — a formatter needs no type checker.
 
 Scripts to add — the names matter, ci.yml and `.githooks/pre-push` both look for exactly
-these: `"format": "prettier --write ."`, `"format:check": "prettier --check ."`, the
-`lint` line from the split above, `"knip": "knip"`.
+these: `"format": "prettier --write ."`, `"format:check": "prettier --check ."`,
+`"lint": "oxlint --type-aware"`, `"knip": "knip"`.
 
 Then, whatever the answers:
 
@@ -152,6 +145,59 @@ These config files are rendered ONCE and then belong to the repo: a sync never o
 them. They carry no `{{...}}` tokens, so "rendering" is copying them and then deleting
 what does not apply — a Tailwind plugin in a repo with no Tailwind, an ignore entry for a
 directory that does not exist.
+
+### A repo already on something else: ASSESS it, never grandfather it
+
+A repo that already has ESLint, or an older TypeScript, does not get to keep them because
+it had them first. Nor do you migrate it because the standard says so. **You find out
+whether it can move, with commands, and the human decides on what you found.** Two repos
+drifting apart is two different quality guarantees, which is the same as none — and
+"we'll do it later" without a named condition is how later never arrives.
+
+Both assessments run in a SCRATCH worktree, never the main checkout, and neither fixes
+anything: their whole output is a report. Bound them — install, run the gate, read the
+errors. Do not start repairing the codebase to make a probe pass; that is the migration
+itself, and it is not yours to start.
+
+**Can the linter move (ESLint → oxlint)?**
+
+1. Install `oxlint` + `oxlint-tsgolint`, drop in the config, run `oxlint --type-aware`.
+2. Name the rules the repo's current ESLint config enables that oxlint has NO equivalent
+   for. Read the overlap rather than guessing at it — `eslint-plugin-oxlint` exists to
+   encode exactly that mapping, and oxlint ships built-in plugin sets (React, hooks,
+   a11y, Next and others) whose coverage is a fact you can check, not estimate.
+3. Run both linters over the current code and diff the findings. What only ESLint reports
+   is the concrete loss; what only oxlint reports is the concrete gain. Counts and rule
+   names, not adjectives.
+
+**Can TypeScript move to 7?**
+
+1. List every dependency that integrates through TypeScript's JS API — the framework's
+   type layer, `ts-jest`, `ts-morph`, template checkers for Vue/Svelte/Astro. TypeScript 7
+   ships without a stable programmatic API (7.1 is where it returns), so these are exactly
+   what breaks.
+2. In the scratch worktree: install TypeScript 7, run type-check, build and tests. Report
+   what fails, verbatim, not paraphrased.
+3. Where the framework supports 7 only behind an experimental flag, say the flag by name
+   AND say it is experimental. A repo that auto-deploys on merge running on a preview flag
+   is a decision the human makes knowingly, not a detail you fold into a summary.
+
+**Then report and stop.** Three shapes, and say which you would pick and why: move now
+(with the cost you measured), move partly (e.g. the linter now, TypeScript when its
+blocker clears), or wait. Waiting is a legitimate answer — an unstable dependency is a
+real reason — but it is only allowed to be an answer when it names **what would unblock
+it**: a version, a release, a flag leaving preview.
+
+Whatever the human decides goes into `AGENTS.md` under "Tooling decision records", WITH
+that unblock condition. That is what turns a deferral into something a later sync can
+check (`UPDATE.md` does exactly this) instead of an argument re-run from scratch every
+few months, or — the actual failure — a repo quietly left behind.
+
+`templates/tooling/eslint.config.mjs` exists for this outcome: a repo that assessed the
+move and deferred it still deserves a good linter meanwhile. It requires TypeScript
+< 6.1 (typescript-eslint's peer range stops there, and forcing the install past it
+crashes ESLint at startup), which is itself a fact for the report — a repo on TypeScript
+7 cannot defer the linter migration, because there is nothing to defer TO.
 
 ## The reviewer (auto-review)
 
