@@ -3,12 +3,17 @@
 // version-bound, and a config written for the wrong major fails loudly at the
 // first run rather than quietly.
 //
+// NOT the standard linter — oxlint with the tsgolint backend is (ADOPT.md,
+// "The static gate"). This file is for one outcome only: a repo that ASSESSED
+// the move to oxlint and, with the human's agreement, deferred it. Deferring
+// is not a reason to lint badly meanwhile.
+//
 // REQUIRES TypeScript < 6.1. typescript-eslint's type-aware rules are built on
 // the compiler's JS API, its peer range stops there, and TypeScript 7 (the Go
 // rewrite) ships without a stable programmatic API — forcing the install past
-// the peer conflict crashes ESLint at startup rather than degrading. A repo on
-// TypeScript 6.1+ gets oxlint with the tsgolint backend instead; see ADOPT.md
-// "The static gate".
+// the peer conflict crashes ESLint at startup rather than degrading. So a repo
+// already on TypeScript 7 cannot defer the linter migration: there is nothing
+// to defer TO.
 //
 // Rendered ONCE at adoption and then this repo's own file: a sync never
 // overwrites it (ADOPT.md, "The static gate"). Delete what does not apply,
