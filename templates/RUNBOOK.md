@@ -52,7 +52,10 @@ in this page — file it.
 
 ## Worktrees (parallel tasks)
 
-<!-- Customize: DELETE this section if you declined the worktree module at adoption. -->
+<!-- Customize: if you declined the worktree module at adoption, delete this section
+     EXCEPT the reviewer-worktree line — without the module nothing can retire that
+     directory for you, and a deleted section is how it goes unnoticed. -->
+
 
 - **Start a task in its own worktree**: `{{PKG_MANAGER}} run task:start -- <name> <branch>`
   — cuts `<branch>` from the latest default branch into `../<repo>-wt-<name>`, provisions
@@ -65,6 +68,16 @@ in this page — file it.
 - **Tidy up leftovers**: `{{PKG_MANAGER}} run worktree:teardown -- --sweep` — reports
   stale registrations, stray directories and orphaned branches; prints deletion commands
   but never deletes a branch itself.
+- **The reviewer's worktree** — `../<repo>-wt-review`, one per repository, created on the
+  first auto-review and kept (that is what makes the folder-trust prompt a one-time
+  question and skips a reinstall per review). It holds a detached checkout plus
+  `node_modules`. Nothing retires it on a schedule: remove it when you want the disk back
+  or a review is stuck on a bad tree — `{{PKG_MANAGER}} run worktree:teardown --
+  --disposable ../<repo>-wt-review`, or without this module
+  `git worktree remove --force ../<repo>-wt-review` then `git worktree prune`. The next
+  `/ship` recreates it. Directories named
+  `<repo>-wt-review-<number>` are from the older per-PR scheme; the launcher retires them
+  where the worktree module is installed and tells you about them where it isn't.
 - **What worktrees may see**: the `.env` allowlist in `scripts/worktree-utils.mts` —
   ships empty; every key you add becomes visible to every worktree, including a
   reviewer's. Secrets stay out.
@@ -136,10 +149,16 @@ because neither half can do the other's job:
   before you merge.
 - Where `.agents/auto-review.sh` is installed, `/ship` starts that reviewer for you — on
   the PR's creation and on every fix push — so your part is only reading the verdict
-  comments. Expect ONE question per PR: the reviewer's first screen in a fresh
-  `review #<pr>` workspace is a folder-trust prompt (each PR reviews in its own
-  worktree) — answer it there and the review runs unattended. More prompts than that
-  one means something is off, not that you must babysit it. The launcher reports its lifecycle as an **`auto-review` status** in the PR's
+  comments. Expect ONE question EVER, not one per PR: the very first review in this
+  repository opens with a folder-trust prompt in its `review #<pr>` workspace, because
+  the reviewer CLI trusts directories and all reviews share one worktree. Answer it once
+  and every later review runs unattended. **A prompt on the second PR is a
+  misconfiguration to fix, not a habit to acquire** — the permission allowlist, the
+  file grants or the launch flags; the reviewer's page (`templates/agy/README.md` for
+  agy) says which. Reviews also serialise, since they share that worktree: a second PR's
+  workspace opens straight away and waits, with `auto-review` reading "queued behind #N".
+  Nothing announces a review that started, queued or asked — the only signal before the
+  verdict is that status. The launcher reports its lifecycle as an **`auto-review` status** in the PR's
   checks list: pending = reviewer running right now, green = verdict comment posted,
   red = reviewer died without posting (the log below says why). A green `auto-review` is
   NOT an approval — it only means the verdict landed; the verdict itself can be a blocker.

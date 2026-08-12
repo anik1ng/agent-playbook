@@ -48,14 +48,36 @@ Derive the branch name you would use from the issue's conventional-commit title 
 
 ## 3. Stage gate — what does this issue need next?
 
-Decide which session this is. The threshold lives in AGENTS.md ("Specs and plans", where
-the repo carries that section); the default where it doesn't: work is **substantial** when
-it takes more than one PR to land, introduces a new entity or subsystem, makes an
-architectural decision, or changes a schema. When unsure, it is substantial. An issue is a
-SEED, not a spec — two lines and a title is a valid issue; this step is where it grows.
+Decide which session this is, on TWO axes — size and uncertainty. An issue is a SEED, not
+a spec — two lines and a title is a valid issue; this step is where it grows.
 
-1. **Small work** → continue to step 4 and implement. (If the human wrote "no spec
+- **Size.** The threshold lives in AGENTS.md ("Specs and plans", where the repo carries
+  that section); the default where it doesn't: work is **substantial** when it takes more
+  than one PR to land, introduces a new entity or subsystem, makes an architectural
+  decision, or changes a schema. When unsure, it is substantial.
+- **Uncertainty.** Is there a decision here the human has not made — a choice between
+  approaches with real trade-offs, a shape the issue names but does not fix, a "should it
+  also…" you would otherwise answer for them? Size does not answer this: a one-PR change
+  can rest entirely on an unmade decision, and implementing it is guessing with a
+  keyboard. Do NOT wait to be asked for a design conversation; the human writing "needs a
+  spec" on the issue is this gate's job outsourced back to them.
+
+**Say the verdict in one line before acting on it** — "Stage gate: small and settled,
+implementing" / "small but there's an open choice: …" / "substantial, this is the
+spec+plan session". Every branch below is silent about itself otherwise, and a session
+that never ran the gate looks exactly like one that ran it and chose to implement.
+
+1. **Small and settled** → continue to step 4 and implement. (If the human wrote "no spec
    needed" on the issue, believe them.)
+
+   **Small but unsettled** → do not open a spec, and do not guess either: ask HERE, in
+   this session, before the code. Questions one at a time, each with the options and what
+   they cost; propose the one you would pick. When the shape is agreed, write it as a
+   COMMENT on the issue (a short "decided: …", so the next session and the reviewer inherit
+   it) and continue to step 4 in the same session. This branch is deliberately cheap — no
+   spec file, no plan, no sub-issues, no fresh session. It exists because most unmade
+   decisions cost one exchange, and the full ceremony below is too heavy to be worth
+   reaching for, so it never gets reached for.
 2. **Substantial, and the issue or its comments link a committed spec** → read the spec
    AND its plan before any code; on the shape of the work they outrank both the issue's
    own prose and your ideas. Then continue to step 4.

@@ -355,10 +355,19 @@ describe("reviewWorktreePr", () => {
   });
 
   test("an ordinary worktree carries no PR number", () => {
-    expect(reviewWorktreePr("/x/myrepo-wt-review")).toBeNull();
     expect(reviewWorktreePr("/x/myrepo-wt-feature")).toBeNull();
     expect(reviewWorktreePr("/x/myrepo-wt-review-abc")).toBeNull();
     expect(reviewWorktreePr("/x/review-117")).toBeNull();
+  });
+
+  // Not a nameless edge case: `<repo>-wt-review` is the CURRENT scheme — one
+  // persistent reviewer checkout per repository, reset per PR. A sweep offers
+  // to retire what this function names, so answering null here is what keeps
+  // the live reviewer checkout off that list. The numbered form above is the
+  // old per-PR scheme, and only its leftovers are retirable.
+  test("the shared reviewer worktree is not a numbered leftover", () => {
+    expect(reviewWorktreePr("/x/myrepo-wt-review")).toBeNull();
+    expect(reviewWorktreePr("/x/myrepo-wt-review/")).toBeNull();
   });
 
   test("only the trailing segment counts", () => {

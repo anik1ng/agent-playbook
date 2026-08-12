@@ -110,15 +110,28 @@ PR `#$PR` following it exactly, and **name the model explicitly** — a default 
 drifts with releases and can silently break the cross-family rule. The script runs the
 session on a visible cmux terminal, so it may be interactive.
 
-Permissions — **allow-broad plus a narrow deny**: grant the tools the protocol needs
-(probe tests, mutation runs, the local gate, `gh`) up front in the CLI's permission
-config, and machine-deny `git push`, `gh pr merge`, `gh pr close` in EVERY form the
-config distinguishes (sandboxed and unsandboxed variants are separate rules in some
-CLIs). Scope the run to this working copy with whatever the CLI offers (sandbox,
-workspace trust, allowed directories); never reach for a blanket permission bypass — a
-bypass does not widen the toolset, it dissolves the boundary. Where the CLI also has a
-pre-tool-use hook, offer it as a second, independent deny layer for the same three
-commands.
+Permissions — **enumerate what the protocol needs, plus a narrow deny**: list the tool
+shapes a review actually uses (probe tests, mutation runs, the local gate, read-only
+`git` and `gh`) in the CLI's permission config, and machine-deny `git push`,
+`gh pr merge`, `gh pr close` in EVERY form the config distinguishes (sandboxed and
+unsandboxed variants are separate rules in some CLIs).
+
+**Never a wildcard allow.** "Grant broadly" is not "grant everything": a `*` rule makes
+the deny list the ONLY boundary, and a prefix deny list is three command shapes — it does
+not cover `gh api` (whose REST route merges a PR) or an argument-reordered
+`git -C <dir> push`. seejs.app was adopted with `command(*)`, looked configured, and had
+no second layer for six PRs.
+
+Scope the run to the REVIEWER's worktree — `<repo>-wt-review`, a sibling of the main
+checkout — with whatever the CLI offers (sandbox, workspace trust, allowed directories,
+per-path file grants). Not the main checkout: it holds the author's uncommitted work,
+the reviewer never runs there, and granting it both misses the directory that needs
+granting and hands out the one that must not be. Never reach for a blanket permission
+bypass — a bypass does not widen the toolset, it dissolves the boundary. Where the CLI
+has a pre-tool-use hook, install it as a second, independent deny layer for the same
+three commands: not an optional extra, since a skipped question here is a repo that can
+never be given the layer later (`UPDATE.md` will not back-fill a hook file the repo does
+not have).
 
 **For agy this is all written out** — the ready-made hook guard, the `{{REVIEW_CMD}}`
 shape, and the allowlist seeding (two grant forms, not one) — in `templates/agy/README.md`;
@@ -129,9 +142,16 @@ copy its shape when rendering for another CLI.
 
 1. Working probe: the rendered command against a harmless prompt or the repo's smallest
    real PR — it starts, reads the skill, runs a command, calls `gh pr list`, and never
-   stalls on a question nobody can answer.
+   stalls on a question nobody can answer. One folder-trust question on the very first
+   review is expected; a second prompt is a finding, not a quirk to answer by hand.
 2. Deny probe: instruct the same session to run `git push --dry-run` — it must be REFUSED
    by the machine layer, not by the model's good manners.
+
+**Re-run both probes whenever the way the reviewer is LAUNCHED changes** — a new CLI
+version, different flags, a different terminal or workspace model — not only at adoption.
+seejs.app moved its reviewer from headless to a cmux workspace in a later PR, nothing
+required re-proving the run, and the regression (a permission prompt per file read)
+shipped and survived two syncs.
 
 ## cmux (optional, detected)
 
@@ -141,17 +161,24 @@ silent counts as absent. What cmux changes when present:
 - **auto-review** runs in a visible workspace `review #<pr>` beside the human's own —
   that is the script's design. Without cmux it fails loudly per launch and the
   `auto-review` status tells the human to run `/review <pr>` themselves: an honest
-  outcome, not a bug to fix with a silent background fallback.
+  outcome, not a bug to fix with a silent background fallback. Reviews share ONE worktree
+  and therefore run one at a time; a second PR's workspace opens immediately and waits,
+  saying "queued behind #N" in its `auto-review` status.
 - **task workspaces**: the worktree module's `task:start` opens a two-pane workspace
   (agent + shell) when cmux answers; without it the git half still works.
 - **verdict announcements are built in**: when the verdict comment lands, the launcher
   itself sends the desktop notification and, on an approve, opens the PR page as a
   background tab in the reviewer's workspace. Nothing to wire — behavior ships in the
   script, and the RUNBOOK only describes it.
-- **What NOT to wire**: per-tool-call "ask" announcements. Against a broad allowlist
-  nothing stalls, and a notify per call blinks once per command for the entire review
-  (nsarchive#129 learned this live). An announcement is only sane paired with a NARROW
-  allowlist where an "ask" genuinely waits on a human — wire both or neither.
+- **What NOT to wire**: per-tool-call "ask" announcements. Against a properly seeded
+  allowlist nothing stalls, and a notify per call blinks once per command for the entire
+  review (nsarchive#129 learned this live). An announcement is only sane paired with a
+  NARROW allowlist where an "ask" genuinely waits on a human — wire both or neither.
+  Say this out loud in the summary, because the consequence is easy to read as a broken
+  integration: **a running review is silent until its verdict lands.** Nothing announces
+  that a session started, is queued, or is waiting on a question — the `auto-review`
+  status on the PR is where a stalled review shows up, and the first review's
+  folder-trust prompt is answered on the reviewer's own terminal.
 
 ## The worktree module (optional — ask)
 
@@ -169,6 +196,15 @@ to an existing `scripts` block):
     "task:finish": "node scripts/finish-task.mts",
     "worktree:setup": "node scripts/setup-worktree.mts",
     "worktree:teardown": "node scripts/teardown-worktree.mts"
+
+**If no — and the reviewer IS installed — say so in `docs/RUNBOOK.md`, in the same
+breath.** `auto-review.sh` delegates every force-removal to this module and refuses to
+`rm -rf` a directory it cannot judge, so without it the reviewer's leftovers are the
+human's job: the launcher reports them (a desktop notification where cmux is present) and
+stops there. A decline that leaves no line in the RUNBOOK is how two full checkouts sat
+unnoticed in seejs.app. The line to write, adjusted to the repo's paths:
+`git worktree remove --force <repo>-wt-review` when the reviewer's checkout is in the
+way, and `git worktree prune` after.
 
 Then ask which `.env` variables the local gate actually reads — the answer fills
 `ALLOWED_ENV_VARS` in `scripts/worktree-utils.mts`. It ships EMPTY; every key added is a
