@@ -314,13 +314,18 @@ if (values.sweep) {
     console.log("\n  Sweep never deletes a branch. Run the lines above yourself.");
   }
 
-  // 4. Reviewer worktrees that git still lists and disk still holds, whose PR
-  //    is done with. Nothing above sees these — they are not orphans, they are
-  //    alive and a full checkout's disk each. Where the repo's auto-review
-  //    launcher reviews in detached worktrees (`<repo>-wt-review-<pr>`), it
-  //    retires them itself, but only on its NEXT launch: the last PR you
-  //    reviewed keeps its worktree until you ship something else. This is
-  //    where that one shows up.
+  // 4. Per-PR reviewer worktrees that git still lists and disk still holds,
+  //    whose PR is done with. Nothing above sees these — they are not orphans,
+  //    they are alive and a full checkout's disk each.
+  //
+  //    These are the OLD scheme: `auto-review.sh` used to review each PR in
+  //    its own `<repo>-wt-review-<pr>` and now keeps ONE `<repo>-wt-review`
+  //    for the repository. The launcher sweeps the numbered leftovers itself,
+  //    but only on its next launch, so this is where the ones it has not
+  //    reached yet show up. The unnumbered `<repo>-wt-review` is deliberately
+  //    NOT in this list (`reviewWorktreePr` returns null for it): it is the
+  //    live reviewer checkout, kept on purpose, and offering to retire it
+  //    would be offering to undo the design.
   const reviewLeftovers = others
     .filter((worktree) => !worktree.prunable)
     .map((worktree) => ({ worktree, pr: reviewWorktreePr(worktree.path) }))

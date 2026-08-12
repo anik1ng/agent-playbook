@@ -32,8 +32,13 @@ was in there" changes belong in a new issue, not in this PR.
 An issue is a SEED, not a spec — a two-line reminder is a valid issue. The `do` skill's
 stage gate decides what it needs next:
 
-- **Small work** (one PR, no new subsystem, no schema change) → `/do <n>` implements it
-  directly.
+- **Small work, decision already made** (one PR, no new subsystem, no schema change) →
+  `/do <n>` implements it directly.
+- **Small work resting on an unmade decision** → `/do <n>` asks FIRST, in that same
+  session: questions one at a time, options with their costs, a recommendation. The agreed
+  shape goes into a comment on the issue, then the code follows. No spec file, no plan, no
+  second session — size is not the same question as certainty, and a one-PR change built
+  on a guess is still a guess.
 - **Substantial work** (more than one PR, a new entity or subsystem, an architectural
   decision, a schema change — when unsure, it is substantial) → a SPEC first, then a PLAN.
 
@@ -196,11 +201,17 @@ here WITH the condition that makes them mandatory. -->
 - **The review starts itself** where `.agents/auto-review.sh` is installed: the `ship`
   skill launches it after every PR open or update, and a fresh session of the repo's
   chosen reviewer CLI follows the same `review` skill and posts the same verdict comment.
-  The launcher reports its lifecycle as an `auto-review` commit status on the PR head
+  It runs on a VISIBLE terminal — a cmux workspace beside your own — because a sandboxed
+  session that hits a question needs somebody who can answer it; there is deliberately no
+  headless fallback, and no cmux means no review and a red `auto-review` status saying to
+  run `/review <n>` by hand. All reviews share ONE worktree (`<repo>-wt-review`), so they
+  run one at a time: a second PR's review waits and reports "queued behind #N". The
+  launcher reports its lifecycle as an `auto-review` commit status on the PR head
   (pending → success/failure); the verdict is still ONLY the comment — a green status is
   not an approval. The reviewer process stays report-only (`git push`, `gh pr merge`,
-  `gh pr close` machine-denied where the CLI supports a deny list) and scoped to this
-  working copy, never launched with a blanket permission bypass.
+  `gh pr close` machine-denied — in the CLI's permission config, and again in a
+  pre-tool-use hook where it has one) and scoped to that worktree, never launched with a
+  blanket permission bypass.
 
 ## Model routing (principles, not model names)
 
