@@ -101,27 +101,32 @@ workspace_ref() {
   ' "$1" 2>>"$LOG"
 }
 
-# The workspace group the CALLER sits in, or nothing.
+# The CALLER's own workspace ref, or nothing when this run is not inside a
+# cmux workspace. Feeds two placements below: which group the reviewer joins,
+# and which workspace it is parked next to. A THROW is reported, for the same
+# reason as in workspace_ref: silence here downgrades placement without saying
+# why, and the reviewer lands at the bottom of the sidebar looking like a bug
+# in cmux.
+caller_workspace_ref() {
+  cmux_q identify | node -e '
+    let s = "";
+    process.stdin.on("data", (d) => (s += d)).on("end", () => {
+      try { process.stdout.write(JSON.parse(s).caller.workspace_ref ?? ""); } catch (e) {
+        process.stderr.write("caller_workspace_ref: could not read cmux identify — " + e.message + "\n");
+      }
+    });
+  ' 2>>"$LOG"
+}
+
+# The workspace group the ref in $1 sits in, or nothing.
 #
 # Without this the reviewer lands outside the author's group, at the bottom of
 # the sidebar, which is exactly where you do not look for it. cmux reports
 # membership only from the group side (`workspace-group list`), never on the
 # workspace, so the caller's own ref has to be matched against the members.
-#
-# Both halves answer nothing when the caller is simply ungrouped — that is the
-# expected path and stays quiet. A THROW is reported, for the same reason as in
-# workspace_ref: silence here downgrades placement without saying why, and the
-# reviewer lands at the bottom of the sidebar looking like a bug in cmux.
+# An ungrouped caller answers nothing — the expected path, and it stays quiet.
 caller_group_ref() {
-  caller=$(cmux_q identify | node -e '
-    let s = "";
-    process.stdin.on("data", (d) => (s += d)).on("end", () => {
-      try { process.stdout.write(JSON.parse(s).caller.workspace_ref ?? ""); } catch (e) {
-        process.stderr.write("caller_group_ref: could not read cmux identify — " + e.message + "\n");
-      }
-    });
-  ' 2>>"$LOG")
-  [ -n "$caller" ] || return 0
+  [ -n "$1" ] || return 0
   cmux_q workspace-group list --json | node -e '
     let s = "";
     process.stdin.on("data", (d) => (s += d)).on("end", () => {
@@ -133,7 +138,7 @@ caller_group_ref() {
         process.stderr.write("caller_group_ref: could not read the cmux workspace-group list — " + e.message + "\n");
       }
     });
-  ' "$caller" 2>>"$LOG"
+  ' "$1" 2>>"$LOG"
 }
 
 WORKSPACE="review #$PR"
@@ -287,7 +292,8 @@ if [ -z "$AUTO_REVIEW_DETACHED" ]; then
   # Beside the author's workspaces, not at the bottom of the sidebar: the
   # review is part of shipping this PR, and a panel you have to hunt for is a
   # panel you stop reading. Ungrouped callers just get the default placement.
-  GROUP=$(caller_group_ref)
+  CALLER_WS=$(caller_workspace_ref)
+  GROUP=$(caller_group_ref "$CALLER_WS")
   if [ -n "$GROUP" ]; then
     NEW_WS=$(cmux_q workspace create \
       --name "$WORKSPACE" \
@@ -306,6 +312,16 @@ if [ -z "$AUTO_REVIEW_DETACHED" ]; then
     set_status failure "reviewer workspace could not be created — see the log"
     echo "auto-review: cmux refused to create the workspace (see $LOG)" >&2
     exit 1
+  fi
+
+  # Directly UNDER its author, not at the group's end: with several tasks in
+  # flight, "end" parks task A's review below task C. Reorder AFTER create,
+  # never an anchor on create itself — `--group-reference` refuses a dead ref
+  # and the whole create fails with it, whereas a reorder against a vanished
+  # author refuses harmlessly and the review simply stays where create put it.
+  if [ -n "$CALLER_WS" ]; then
+    cmux_q reorder-workspace --workspace "$NEW_WS" --after "$CALLER_WS" \
+      >>"$LOG" 2>&1 || true
   fi
   echo "workspace “$WORKSPACE” created ($NEW_WS)" >>"$LOG"
   exit 0
