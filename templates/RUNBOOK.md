@@ -122,10 +122,12 @@ because neither half can do the other's job:
 - **Security updates bypass the Dependabot cooldown by design** — a known-exploited CVE
   outranks a fresh-release risk. Confirm they're on: repo **Settings → Advanced Security →
   Dependabot security updates**. Only you can see or toggle that checkbox; no PR can.
-- A local min-age setting gates **resolution, not installation**: make sure an
-  already-committed lockfile still installs as-is, or `--frozen-lockfile` in CI breaks every
-  time a security patch lands younger than the cooldown — exactly backwards for the update
-  class that should move fastest.
+- A local min-age setting gates the **lockfile too, not just fresh resolution**: pnpm
+  verifies lockfile entries on every install, `--frozen-lockfile` included, so CI goes red
+  while ANY entry — a transitive somebody's bump dragged in included — is younger than the
+  cutoff. That red is the quarantine working: wait the window out, or use the exclude
+  below. Never `trustLockfile: true` — it "fixes" this by turning off the supply-chain
+  verification pass itself, the protection the cooldown exists to add.
 - If you need a package published today, add that exact version to your package manager's
   exclude list, install, then drop the line in the same PR — with a comment naming the CVE.
   An exclude with no removal date in its comment is a bug.

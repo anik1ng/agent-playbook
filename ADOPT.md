@@ -356,10 +356,19 @@ safety net is dormant until a runner exists.
 - Offer squash-only merges:
   `gh api -X PATCH repos/{owner}/{repo} -F allow_squash_merge=true
   -F allow_merge_commit=false -F allow_rebase_merge=false -F delete_branch_on_merge=true`.
-- Offer the package-manager cooldown — for pnpm, `minimumReleaseAge: 4320` plus
-  `trustLockfile: true` in `pnpm-workspace.yaml` (without the latter, frozen-lockfile CI
-  breaks on every security patch younger than the cooldown). No equivalent for this
-  manager → say so and drop that RUNBOOK row.
+- Offer the package-manager cooldown — for pnpm, `minimumReleaseAge: 4320` in
+  `pnpm-workspace.yaml` (pnpm 10.16+; older pnpm or a manager with no equivalent → say
+  so and drop that RUNBOOK row). Name the cost IN the offer, so the repo accepts it
+  knowingly: pnpm verifies LOCKFILE ENTRIES, not just fresh resolution, so even a
+  `--frozen-lockfile` CI install fails while any entry is younger than the cutoff — and
+  the whole dependency TREE counts, because a bump drags in transitives whose age nobody
+  chose (verified live in seejs.app: `ERR_PNPM_MINIMUM_RELEASE_AGE_VIOLATION` on a
+  one-day-old transitive, on a frozen install). The honest remedies are waiting the
+  window out, or a `minimumReleaseAgeExclude` entry carrying its reason and a removal
+  date. NEVER `trustLockfile: true`: its name reads like the fix for exactly this
+  failure, and what it actually does is skip pnpm's supply-chain verification pass —
+  the very protection the cooldown exists to add (pnpm's own docs say keep it off).
+  A red CI on a too-fresh package is the quarantine working, not breaking.
 
 Then point the human at **`SETUP.md`** — the GitHub side (merge settings, the branch
 ruleset, Advanced Security, Actions hardening), ~10 minutes, and the ruleset step needs
