@@ -75,6 +75,12 @@ difference is drift to sync — EXCEPT these declared local parts, which always 
   history, in the sync's own worktree) and record the date in the same PR. Report what
   the sweep finds VERBATIM before recording anything; never invent a date, and if the
   human says they swept by hand, the date is theirs to supply.
+- `dependabot.yml` — a `docker` ecosystem entry, where the repo added one for its own
+  `Dockerfile` (ADOPT.md's snippet); the template ships without it on purpose. The check
+  runs BOTH ways, every sync: a tree that holds a `Dockerfile` while `dependabot.yml`
+  has no `docker` entry gets the OFFER — a repo that grew its Dockerfile after adoption
+  is otherwise never asked, and its base image stays unwatched forever (how seejs.app's
+  build image went stale in silence).
 - `settings.json` — everything except the template's two keys (`attribution` and the
   auto-review allow rule); the file was installed by merging, so local content is the
   design working.

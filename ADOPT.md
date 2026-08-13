@@ -356,6 +356,26 @@ safety net is dormant until a runner exists.
 - Offer squash-only merges:
   `gh api -X PATCH repos/{owner}/{repo} -F allow_squash_merge=true
   -F allow_merge_commit=false -F allow_rebase_merge=false -F delete_branch_on_merge=true`.
+- A `Dockerfile` in the repo → offer a `docker` entry in `.github/dependabot.yml`:
+
+      - package-ecosystem: docker
+        directory: /
+        schedule:
+          interval: weekly
+          day: monday
+        cooldown:
+          semver-major-days: 14
+          semver-minor-days: 3
+          semver-patch-days: 3
+        labels:
+          - dependencies
+          - docker
+
+  A repo that builds its own image owns a base image nobody else watches — the same
+  silent-staleness failure the cooldowns above exist for, one registry over. The template
+  deliberately ships without this entry (most adopted repos build no image), so it is a
+  per-repo addition that a sync PRESERVES — UPDATE.md lists it among `dependabot.yml`'s
+  declared local parts.
 - Offer the package-manager cooldown — for pnpm, `minimumReleaseAge: 4320` in
   `pnpm-workspace.yaml` (pnpm 10.16+; older pnpm or a manager with no equivalent → say
   so and drop that RUNBOOK row). Name the cost IN the offer, so the repo accepts it
