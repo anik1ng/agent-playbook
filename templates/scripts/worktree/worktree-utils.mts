@@ -289,6 +289,93 @@ export function classifyBranch(facts: BranchFacts): BranchVerdict {
   };
 }
 
+export type RetireFacts = {
+  /** Branch short name, or `null` for a detached worktree. */
+  branch: string | null;
+  /** Uncommitted changes present (`status --porcelain` non-empty), untracked included. */
+  dirty: boolean;
+  /** The branch's gathered facts; `null` when the worktree is detached. */
+  branchFacts: BranchFacts | null;
+};
+
+export type RetireDecision = {
+  /** `retire` acts; every `kept-*` kind is a refusal with its own audience. */
+  kind: "retire" | "kept-unfinished" | "kept-finished-but-dirty" | "kept-detached";
+  /** What was checked, what was found — printed verbatim to the human. */
+  reason: string;
+};
+
+/**
+ * May this worktree be retired on an IMPLICIT gesture — its workspace being
+ * closed — rather than an explicit teardown command?
+ *
+ * The bar is deliberately HIGHER than `classifyBranch`'s: that predicate
+ * answers "can deleting this lose work?", and a branch that is fully pushed
+ * with its PR still OPEN passes it — origin holds every commit, nothing is
+ * lost. But it is exactly the branch a reaper must not touch: closing a
+ * workspace to tidy the sidebar while the PR waits on review must stay a
+ * free action, or review blockers come back to a worktree that no longer
+ * exists. So "safe to delete" is not enough here; only "provably DONE"
+ * acts, and done means one thing: a MERGED pull request whose head contains
+ * the branch's tip.
+ *
+ * A dirty tree on a provably merged branch gets its own kind: that is the
+ * one refusal worth announcing (the task looks finished, the reaper stayed
+ * its hand), where an unfinished branch's refusal is the silent normal case.
+ */
+export function classifyRetirable(facts: RetireFacts): RetireDecision {
+  if (facts.branch === null || facts.branchFacts === null) {
+    return {
+      kind: "kept-detached",
+      reason:
+        "detached HEAD — a reviewer's checkout or an experiment, never a finished task",
+    };
+  }
+
+  const { localHead, mergedPrHeads } = facts.branchFacts;
+
+  if (mergedPrHeads === undefined) {
+    return {
+      kind: "kept-unfinished",
+      reason:
+        "the merged-PR check DID NOT RUN (gh unavailable) — not provably " +
+        "finished, so nothing was touched",
+    };
+  }
+
+  const containing = mergedPrHeads.find(
+    (head) => head.containsLocalHead === true,
+  );
+  if (containing === undefined) {
+    return {
+      kind: "kept-unfinished",
+      reason:
+        mergedPrHeads.length === 0
+          ? `no merged PR exists for it — the task is still in flight`
+          : `no merged PR provably contains the tip (${short(localHead)}) — ` +
+            "either work landed after the merge or the containment check " +
+            "could not run",
+    };
+  }
+
+  const merged =
+    containing.sha === localHead
+      ? `a PR from it was merged at this exact head (${short(localHead)})`
+      : `a PR from it was merged at ${short(containing.sha)}, which contains ` +
+        `the tip (${short(localHead)})`;
+
+  if (facts.dirty) {
+    return {
+      kind: "kept-finished-but-dirty",
+      reason:
+        `${merged} — but the tree holds uncommitted changes; commit or ` +
+        "discard them, then retire it yourself",
+    };
+  }
+
+  return { kind: "retire", reason: merged };
+}
+
 export type DisposableFacts = {
   /** The worktree's path — quoted back in the verdict, never parsed. */
   path: string;

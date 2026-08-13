@@ -4,6 +4,7 @@ import {
   ALLOWED_ENV_VARS,
   classifyBranch,
   classifyDisposable,
+  classifyRetirable,
   classifyReviewWorktree,
   computeOrphans,
   envKeys,
@@ -304,6 +305,106 @@ describe("classifyBranch", () => {
     });
 
     expect(verdict.deletable).toBe(true);
+  });
+});
+
+describe("classifyRetirable", () => {
+  const HEAD = "1111111111111111111111111111111111111111";
+  const UPDATED = "3333333333333333333333333333333333333333";
+
+  const merged: BranchFacts = {
+    branch: "fix/x",
+    unpushedCommits: 4,
+    localHead: HEAD,
+    mergedPrHeads: [{ sha: HEAD, containsLocalHead: true }],
+  };
+
+  test("merged PR containing the tip, clean tree → retire", () => {
+    const decision = classifyRetirable({
+      branch: "fix/x",
+      dirty: false,
+      branchFacts: merged,
+    });
+
+    expect(decision.kind).toBe("retire");
+    expect(decision.reason).toContain("merged");
+  });
+
+  test("merged AHEAD of the tip (“Update branch”) → retire", () => {
+    const decision = classifyRetirable({
+      branch: "fix/x",
+      dirty: false,
+      branchFacts: {
+        ...merged,
+        mergedPrHeads: [{ sha: UPDATED, containsLocalHead: true }],
+      },
+    });
+
+    expect(decision.kind).toBe("retire");
+  });
+
+  test("fully pushed but NO merged PR → kept, however deletable it is", () => {
+    // The line between this predicate and classifyBranch, and the reason it
+    // exists at all: a pushed branch whose PR is still OPEN is perfectly
+    // safe to delete (origin holds every commit) and is exactly what a
+    // reaper must not touch — review blockers come back to a worktree that
+    // would no longer exist. An implementation that reuses classifyBranch's
+    // "everything is on origin" arm retires here, and this test goes red.
+    const decision = classifyRetirable({
+      branch: "fix/x",
+      dirty: false,
+      branchFacts: { ...merged, unpushedCommits: 0, mergedPrHeads: [] },
+    });
+
+    expect(decision.kind).toBe("kept-unfinished");
+    expect(decision.reason).toContain("in flight");
+  });
+
+  test("merged, but the tip is not contained → kept", () => {
+    const decision = classifyRetirable({
+      branch: "fix/x",
+      dirty: false,
+      branchFacts: {
+        ...merged,
+        mergedPrHeads: [{ sha: UPDATED, containsLocalHead: false }],
+      },
+    });
+
+    expect(decision.kind).toBe("kept-unfinished");
+  });
+
+  test("the merged-PR check could not run → kept as unanswered, not as safe", () => {
+    const decision = classifyRetirable({
+      branch: "fix/x",
+      dirty: false,
+      branchFacts: { ...merged, mergedPrHeads: undefined },
+    });
+
+    expect(decision.kind).toBe("kept-unfinished");
+    expect(decision.reason).toContain("DID NOT RUN");
+  });
+
+  test("merged but dirty → its OWN kind, so the refusal can be announced", () => {
+    // The one refusal worth a notification: the human believes the task is
+    // done, and the reaper left the worktree standing on purpose.
+    const decision = classifyRetirable({
+      branch: "fix/x",
+      dirty: true,
+      branchFacts: merged,
+    });
+
+    expect(decision.kind).toBe("kept-finished-but-dirty");
+    expect(decision.reason).toContain("uncommitted");
+  });
+
+  test("detached → kept: a reviewer's checkout is never a finished task", () => {
+    const decision = classifyRetirable({
+      branch: null,
+      dirty: false,
+      branchFacts: null,
+    });
+
+    expect(decision.kind).toBe("kept-detached");
   });
 });
 

@@ -39,7 +39,7 @@ blocks a direct push.
 | `settings.json`              | `.claude/settings.json` (merge into existing)        |
 | `skills/{do,ship,review}/`   | `.agents/skills/<name>/SKILL.md`                     |
 | `scripts/auto-review.sh`     | `.agents/auto-review.sh` (755; only with a reviewer) |
-| `scripts/worktree/*` (8)     | `scripts/` (only when the worktree module is wanted) |
+| `scripts/worktree/*` (11)    | `scripts/` (only when the worktree module is wanted) |
 | `tooling/*` (3)              | repo root (only the ones "The static gate" installs)  |
 
 Plus three RELATIVE symlinks: `.claude/skills/<name>` → `../../.agents/skills/<name>`.
@@ -311,13 +311,23 @@ opens a cmux workspace where one is available; `task:finish <name>` retires it, 
 to delete anything that could hold the only copy of work; `worktree:teardown --sweep`
 reports leftovers and never deletes a branch on its own.
 
-If yes: install the eight files into `scripts/` and wire `package.json` (Rule 0 applies
+If yes: install the eleven files into `scripts/` and wire `package.json` (Rule 0 applies
 to an existing `scripts` block):
 
     "task:start": "node scripts/start-task.mts",
     "task:finish": "node scripts/finish-task.mts",
+    "task:reaper": "node scripts/reaper.mts",
     "worktree:setup": "node scripts/setup-worktree.mts",
     "worktree:teardown": "node scripts/teardown-worktree.mts"
+
+The module also carries the **workspace reaper** — `task:reaper`, a long-running
+listener the HUMAN starts, ONE per machine, that retires a task when its cmux
+workspace closes and the task is provably finished (merged PR containing the branch
+tip, clean tree; everything else is left untouched). It is cmux-gated and optional to
+RUN, not to install: the script ships either way, and `docs/RUNBOOK.md`'s worktree
+section describes starting it — that section is part of rendering the RUNBOOK when
+the module is accepted. Never start it yourself; long-running processes are the
+human's (see "Servers and scripts" in the AGENTS.md template).
 
 **If no — and the reviewer IS installed — say so in `docs/RUNBOOK.md`, in the same
 breath.** `auto-review.sh` delegates every force-removal to this module and refuses to
@@ -331,7 +341,7 @@ way, and `git worktree prune` after.
 Then ask which `.env` variables the local gate actually reads — the answer fills
 `ALLOWED_ENV_VARS` in `scripts/worktree-utils.mts`. It ships EMPTY; every key added is a
 declaration that every worktree, a reviewer's included, may see that value. Never offer
-secrets; "none" is a common and correct answer. The module's two test files run under
+secrets; "none" is a common and correct answer. The module's three test files run under
 vitest/jest where the repo has one; where it has neither, install them anyway and say the
 safety net is dormant until a runner exists.
 

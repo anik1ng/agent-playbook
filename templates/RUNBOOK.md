@@ -65,6 +65,18 @@ in this page — file it.
   the worktree, deletes the branch ONLY when that provably loses nothing (merged PR
   containing the tip, or everything pushed), closes the workspace last. A refusal means
   uncommitted work is in there — that refusal is the safety net, don't force it.
+- **Or just close the workspace** — where the reaper is running. `{{PKG_MANAGER}} run
+  task:reaper` is a long-running listener, ONE per machine (any adopted repo's copy
+  serves them all): every closed cmux workspace whose directory is a task worktree gets
+  judged, and a task that is provably DONE — merged PR containing the branch tip, clean
+  tree — is retired on the spot (worktree removed, branch deleted, desktop notification).
+  Anything less than proof is left untouched, so closing the workspace of a task still
+  in review stays free, and a merged task with uncommitted leftovers announces itself
+  instead of being cleaned. You start the reaper and you keep it running — a terminal
+  you leave open, or a launchd agent (`~/Library/LaunchAgents/`, a plist that runs
+  `{{PKG_MANAGER}} run task:reaper` in this repo with `KeepAlive`; remember launchd's
+  PATH knows nothing about your shell — point it at absolute paths). Closes that happen
+  while it is down are what `--sweep` below catches.
 - **Tidy up leftovers**: `{{PKG_MANAGER}} run worktree:teardown -- --sweep` — reports
   stale registrations, stray directories and orphaned branches; prints deletion commands
   but never deletes a branch itself.

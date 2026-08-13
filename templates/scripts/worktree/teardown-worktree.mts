@@ -3,6 +3,7 @@
  *
  *   <pkg-manager> run worktree:teardown -- <path|name>   # remove that worktree, then judge its branch
  *   <pkg-manager> run worktree:teardown -- --disposable <path|name>   # force-remove a DETACHED one
+ *   <pkg-manager> run worktree:teardown -- --only-finished <path|name>   # retire a provably FINISHED task, else no-op
  *   <pkg-manager> run worktree:teardown -- --sweep       # report leftovers; delete NO branch
  *
  * cwd must be a checkout that is NOT the target — normally the main one:
@@ -21,6 +22,13 @@
  * for a reviewer's worktree, which is scratch by construction — see that
  * function for why, and note that the plain teardown above is unchanged.
  *
+ * `--only-finished` inverts the default posture: instead of "remove unless
+ * git refuses", it is "refuse unless the task is provably DONE" — a merged
+ * PR containing the branch tip, on a clean tree. Gated by
+ * `classifyRetirable()`; built for the workspace reaper (reaper.mts), which
+ * hangs this on every closed cmux workspace and therefore must never turn
+ * closing a workspace into a destructive act.
+ *
  * Imports nothing but node builtins (see worktree-utils.mts).
  */
 import { execFileSync } from "node:child_process";
@@ -31,6 +39,7 @@ import { parseArgs } from "node:util";
 import {
   classifyBranch,
   classifyDisposable,
+  classifyRetirable,
   classifyReviewWorktree,
   computeOrphans,
   isInside,
@@ -46,6 +55,9 @@ const USAGE = [
   "  worktree:teardown -- <path|name>   remove that worktree, then judge its branch",
   "  worktree:teardown -- --disposable <path|name>",
   "                                     force-remove a DETACHED worktree, scratch and all",
+  "  worktree:teardown -- --only-finished <path|name>",
+  "                                     retire ONLY a provably finished task (merged PR,",
+  "                                     clean tree); anything else is a quiet no-op",
   "  worktree:teardown -- --sweep       report leftovers (deletes no branch)",
 ].join("\n");
 
@@ -67,7 +79,11 @@ function resolvePath(target: string): string {
 let parsed;
 try {
   parsed = parseArgs({
-    options: { sweep: { type: "boolean" }, disposable: { type: "boolean" } },
+    options: {
+      sweep: { type: "boolean" },
+      disposable: { type: "boolean" },
+      "only-finished": { type: "boolean" },
+    },
     allowPositionals: true,
     strict: true,
   });
@@ -75,9 +91,14 @@ try {
   fail(`${(error as Error).message}\n\n${USAGE}`);
 }
 const { values, positionals } = parsed;
+const modes = [
+  values.sweep && "--sweep",
+  values.disposable && "--disposable",
+  values["only-finished"] && "--only-finished",
+].filter(Boolean);
 
-if (values.sweep && values.disposable) {
-  fail(`--sweep and --disposable are different jobs.\n\n${USAGE}`);
+if (modes.length > 1) {
+  fail(`${modes.join(" and ")} are different jobs.\n\n${USAGE}`);
 }
 if (values.sweep && positionals.length > 0) {
   fail(`--sweep takes no target.\n\n${USAGE}`);
@@ -206,11 +227,11 @@ function prState(pr: number): string | undefined {
   }
 }
 
-function judgeBranch(branch: string) {
+function branchFactsFor(branch: string) {
   const localHead = git(["rev-parse", branch]);
   const merged = mergedPrs(branch);
 
-  return classifyBranch({
+  return {
     branch,
     unpushedCommits: Number(
       git(["rev-list", "--count", branch, "--not", "--remotes=origin"]),
@@ -220,7 +241,11 @@ function judgeBranch(branch: string) {
       sha: pr.headRefOid,
       containsLocalHead: containsLocalHead(localHead, pr),
     })),
-  });
+  };
+}
+
+function judgeBranch(branch: string) {
+  return classifyBranch(branchFactsFor(branch));
 }
 
 // ---------------------------------------------------------------------------
@@ -396,6 +421,52 @@ if (isInside(cwd, target.path)) {
     `cwd is inside the worktree being removed (${target.path}).\n` +
       `  git cannot remove it from within. Run this from ${mainCheckout.path}.`,
   );
+}
+
+// ---------------------------------------------------------------------------
+// --only-finished: retire on proof, refuse quietly
+// ---------------------------------------------------------------------------
+//
+// This mode exists so teardown can hang on an IMPLICIT gesture — a workspace
+// closing (see reaper.mts) — instead of an explicit command. Its verdict line
+// is therefore a machine contract, parsed by reaper-utils.mts:
+// `only-finished: retired — …` / `only-finished: kept (<kind>) — …`.
+// Changing that shape silently breaks the reaper's notifications.
+
+if (values["only-finished"]) {
+  const dirty =
+    execFileSync("git", ["-C", target.path, "status", "--porcelain"], {
+      encoding: "utf8",
+    }).trim() !== "";
+  const decision = classifyRetirable({
+    branch: target.branch,
+    dirty,
+    branchFacts: target.branch === null ? null : branchFactsFor(target.branch),
+  });
+
+  if (decision.kind !== "retire") {
+    console.log(
+      `only-finished: kept (${decision.kind.replace(/^kept-/, "")}) — ${decision.reason}`,
+    );
+    process.exit(0);
+  }
+
+  try {
+    execFileSync("git", ["worktree", "remove", target.path], {
+      encoding: "utf8",
+      stdio: ["ignore", "pipe", "pipe"],
+    });
+  } catch (error) {
+    const stderr = String((error as { stderr?: string }).stderr ?? "").trim();
+    console.error(`✗ git refused to remove the worktree:\n\n  ${stderr}`);
+    console.log("only-finished: error — git refused to remove the worktree");
+    process.exit(1);
+  }
+  git(["branch", "-D", target.branch as string]);
+  console.log(
+    `only-finished: retired — branch ${target.branch} deleted (${decision.reason})`,
+  );
+  process.exit(0);
 }
 
 console.log(`removing ${target.path}  [${target.branch ?? "detached"}]\n`);
