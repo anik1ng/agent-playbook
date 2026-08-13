@@ -289,9 +289,11 @@ silent counts as absent. What cmux changes when present:
 - **task workspaces**: the worktree module's `task:start` opens a two-pane workspace
   (agent + shell) when cmux answers; without it the git half still works.
 - **verdict announcements are built in**: when the verdict comment lands, the launcher
-  itself sends the desktop notification and, on an approve, opens the PR page as a
-  background tab in the reviewer's workspace. Nothing to wire — behavior ships in the
-  script, and the RUNBOOK only describes it.
+  itself sends the desktop notification; on an approve it opens the PR page as a
+  background tab in the reviewer's workspace, and on a blocker it messages the AUTHOR's
+  task workspace directly (`cmux send` — the session there receives "fix the blockers,
+  then /ship" as an ordinary user turn and starts the fix loop unprompted). Nothing to
+  wire — behavior ships in the script, and the RUNBOOK only describes it.
 - **What NOT to wire**: per-tool-call "ask" announcements. Against a properly seeded
   allowlist nothing stalls, and a notify per call blinks once per command for the entire
   review (nsarchive#129 learned this live). An announcement is only sane paired with a

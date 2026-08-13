@@ -143,6 +143,26 @@ caller_group_ref() {
 
 WORKSPACE="review #$PR"
 
+# The author's LIVE task workspace for this PR, or nothing. Resolved at SEND
+# time, never remembered at launch: cmux renumbers workspace refs across app
+# restarts (probed 2026-08-13, cmux 0.64), so a ref recorded when the review
+# started can name somebody else's workspace by the time the verdict lands.
+# The chain is convention the worktree module already guarantees: the PR's
+# branch names the worktree (`<repo>-wt-<name>`), the `<name>` names the
+# workspace `task:start` opened for it — and workspace_ref() answers only on
+# an unambiguous title match, so a renamed or duplicated workspace yields
+# nothing rather than a guess.
+author_workspace_ref() {
+  AUTHOR_BRANCH=$(gh pr view "$PR" --json headRefName --jq .headRefName 2>/dev/null)
+  [ -n "$AUTHOR_BRANCH" ] || return 0
+  AUTHOR_WT=$(git worktree list --porcelain | awk -v b="branch refs/heads/$AUTHOR_BRANCH" '
+    /^worktree / { path = substr($0, 10) }
+    $0 == b { print path; exit }')
+  case "$AUTHOR_WT" in
+    *-wt-*) workspace_ref "${AUTHOR_WT##*-wt-}" ;;
+  esac
+}
+
 # Tell the human, once per head: a desktop notification with the verdict, and
 # — approve only — the PR page as a background tab in the reviewer's own
 # workspace (a blocker is the author's work, not something to park in a tab).
@@ -167,6 +187,23 @@ announce_verdict() {
       URL=$(gh pr view "$PR" --json url --jq .url 2>/dev/null)
       if [ -n "$URL" ]; then
         CMUX_QUIET=1 cmux browser open "$URL" --focus false >/dev/null 2>&1 || true
+      fi
+      ;;
+    *[Bb]lock*)
+      # The fix loop starts itself: the author's session receives the verdict
+      # as an ordinary user message and goes to work before the human has
+      # even read it. `cmux send` into a live interactive session is probed
+      # behavior (2026-08-13): the text lands as a user turn and queues
+      # cleanly even while the agent is mid-task. Approve sends nothing —
+      # what follows an approve (hand-test, merge) is the human's, not an
+      # agent's. Best-effort at every step: a closed or renamed author
+      # workspace answers nothing above, and the desktop notification stays
+      # the only announcement.
+      AUTHOR_WS=$(author_workspace_ref)
+      if [ -n "$AUTHOR_WS" ]; then
+        CMUX_QUIET=1 cmux send --workspace "$AUTHOR_WS" -- \
+          "auto-review of PR #$PR: BLOCKER — read the reviewer's verdict comment on the PR, fix the blockers, then /ship to re-review.\n" \
+          >>"$LOG" 2>&1 || true
       fi
       ;;
   esac

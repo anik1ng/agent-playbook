@@ -161,7 +161,10 @@ because neither half can do the other's job:
   before you merge.
 - Where `.agents/auto-review.sh` is installed, `/ship` starts that reviewer for you — on
   the PR's creation and on every fix push — so your part is only reading the verdict
-  comments. Expect ONE question EVER, not one per PR: the very first review in this
+  comments. A **blocker** verdict additionally messages the author's own task workspace
+  ("fix the blockers, then /ship") — expect that session to start working on the fixes
+  before you have read anything; an **approve** messages nobody, since what follows it
+  (your hand-test, your merge) is yours. Expect ONE question EVER, not one per PR: the very first review in this
   repository opens with a folder-trust prompt in its `review #<pr>` workspace, because
   the reviewer CLI trusts directories and all reviews share one worktree. Answer it once
   and every later review runs unattended. **A prompt on the second PR is a
