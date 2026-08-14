@@ -290,9 +290,13 @@ silent counts as absent. What cmux changes when present:
   (agent + shell) when cmux answers; without it the git half still works.
 - **verdict announcements are built in**: when the verdict comment lands, the launcher
   itself sends the desktop notification; on an approve it opens the PR page as a
-  background tab in the reviewer's workspace, and on a blocker it messages the AUTHOR's
-  task workspace directly (`cmux send` — the session there receives "fix the blockers,
-  then /ship" as an ordinary user turn and starts the fix loop unprompted). Nothing to
+  background tab in the reviewer's workspace, and on a blocker it reaches the AUTHOR's
+  task workspace on three channels — the `needs-attention` sidebar lane and a checklist
+  item (both survive a closed session), then `cmux send` (the live session receives "fix
+  the blockers, then /ship" as an ordinary user turn and starts the fix loop unprompted).
+  The author's workspace is found by its WORKTREE PATH (cwd), not by its title — titles
+  get renamed; a rename must never lose a blocker — and the resolution outcome lands in
+  the log and in the `auto-review` status text either way. Nothing to
   wire — behavior ships in the script, and the RUNBOOK only describes it.
 - **What NOT to wire**: per-tool-call "ask" announcements. Against a properly seeded
   allowlist nothing stalls, and a notify per call blinks once per command for the entire

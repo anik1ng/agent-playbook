@@ -128,6 +128,39 @@ workspace_ref() {
   ' "$1" 2>>"$LOG"
 }
 
+# The workspace whose cwd is (or is inside) the directory in $1, or nothing.
+#
+# This is the STABLE key, where title is not: a title is a human-facing field
+# that gets renamed by definition — the blocker for seejs.app #53 was lost to
+# an author workspace renamed "do #9 loop guard", which a title match for "9"
+# answered nothing about, silently. The cwd is how cmux itself says where a
+# workspace lives (`workspace list --json` calls it current_directory; the
+# workspace.closed event calls the same value cwd). Both sides are realpath'd
+# before comparing — worktree paths reach this script from git and from cmux,
+# and a symlinked parent would otherwise be a false miss. Ambiguity answers
+# nothing, same rule and same reason as workspace_ref above.
+workspace_ref_by_dir() {
+  cmux_q workspace list --json | node -e '
+    const fs = require("fs");
+    const real = (p) => { try { return fs.realpathSync(p); } catch { return null; } };
+    const target = real(process.argv[1]);
+    let s = "";
+    process.stdin.on("data", (d) => (s += d)).on("end", () => {
+      if (target === null) return;
+      try {
+        const m = JSON.parse(s).workspaces.filter((w) => {
+          if (typeof w.current_directory !== "string" || w.current_directory === "") return false;
+          const dir = real(w.current_directory);
+          return dir !== null && (dir === target || dir.startsWith(target + "/"));
+        });
+        if (m.length === 1) process.stdout.write(m[0].ref);
+      } catch (e) {
+        process.stderr.write("workspace_ref_by_dir(" + process.argv[1] + "): could not read the cmux workspace list — " + e.message + "\n");
+      }
+    });
+  ' "$1" 2>>"$LOG"
+}
+
 # The CALLER's own workspace ref, or nothing when this run is not inside a
 # cmux workspace. Feeds two placements below: which group the reviewer joins,
 # and which workspace it is parked next to. A THROW is reported, for the same
@@ -174,20 +207,45 @@ WORKSPACE="review #$PR"
 # time, never remembered at launch: cmux renumbers workspace refs across app
 # restarts (probed 2026-08-13, cmux 0.64), so a ref recorded when the review
 # started can name somebody else's workspace by the time the verdict lands.
-# The chain is convention the worktree module already guarantees: the PR's
-# branch names the worktree (`<repo>-wt-<name>`), the `<name>` names the
-# workspace `task:start` opened for it — and workspace_ref() answers only on
-# an unambiguous title match, so a renamed or duplicated workspace yields
-# nothing rather than a guess.
+# The chain: the PR's branch names the worktree (`git worktree list` says
+# which), and the worktree's PATH names the workspace — by cwd first
+# (workspace_ref_by_dir, the stable key), by the `<repo>-wt-<name>` title
+# convention second, kept as the fallback it should always have been. Title
+# was the PRIMARY once, and it cost a real blocker: the convention "title
+# equals <name>" does not survive contact with a rename, and every live
+# workspace on the machine that day violated it — one of them renamed by
+# THIS script (`review #<pr>` below).
+#
+# The outcome is LOGGED unconditionally, resolved or not. Every consumer of
+# this function is best-effort (`|| true` all the way down), which is right —
+# a missing cmux must never gate a verdict — but best effort that leaves no
+# trace made this exact miss indistinguishable from the feature not
+# existing, for a whole debugging session (seejs.app #53).
 author_workspace_ref() {
   AUTHOR_BRANCH=$(gh pr view "$PR" --json headRefName --jq .headRefName 2>/dev/null)
-  [ -n "$AUTHOR_BRANCH" ] || return 0
+  [ -n "$AUTHOR_BRANCH" ] || {
+    echo "author workspace: unresolved — could not read the PR head branch" >>"$LOG"
+    return 0
+  }
   AUTHOR_WT=$(git worktree list --porcelain | awk -v b="branch refs/heads/$AUTHOR_BRANCH" '
     /^worktree / { path = substr($0, 10) }
     $0 == b { print path; exit }')
-  case "$AUTHOR_WT" in
-    *-wt-*) workspace_ref "${AUTHOR_WT##*-wt-}" ;;
-  esac
+  [ -n "$AUTHOR_WT" ] || {
+    echo "author workspace: unresolved — no worktree holds $AUTHOR_BRANCH" >>"$LOG"
+    return 0
+  }
+  AUTHOR_WS=$(workspace_ref_by_dir "$AUTHOR_WT")
+  if [ -z "$AUTHOR_WS" ]; then
+    case "$AUTHOR_WT" in
+      *-wt-*) AUTHOR_WS=$(workspace_ref "${AUTHOR_WT##*-wt-}") ;;
+    esac
+  fi
+  if [ -n "$AUTHOR_WS" ]; then
+    echo "author workspace: $AUTHOR_WS (worktree $AUTHOR_WT)" >>"$LOG"
+    printf '%s' "$AUTHOR_WS"
+  else
+    echo "author workspace: unresolved for $AUTHOR_WT — no workspace matches by cwd or title" >>"$LOG"
+  fi
 }
 
 # Tell the human, once per head: a desktop notification with the verdict, and
@@ -217,20 +275,29 @@ announce_verdict() {
       fi
       ;;
     *[Bb]lock*)
-      # The fix loop starts itself: the author's session receives the verdict
-      # as an ordinary user message and goes to work before the human has
-      # even read it. `cmux send` into a live interactive session is probed
-      # behavior (2026-08-13): the text lands as a user turn and queues
-      # cleanly even while the agent is mid-task. Approve sends nothing —
-      # what follows an approve (hand-test, merge) is the human's, not an
-      # agent's. Best-effort at every step: a closed or renamed author
-      # workspace answers nothing above, and the desktop notification stays
-      # the only announcement.
+      # Three channels, durable ones FIRST — the sidebar lane and the
+      # checklist item survive an author session that is closed or restarted;
+      # the send only reaches a live one, and starts the fix loop when it
+      # does: the session receives the verdict as an ordinary user message
+      # and goes to work before the human has even read it (`cmux send` into
+      # a live interactive session is probed behavior, 2026-08-13 — the text
+      # queues cleanly even mid-task). Approve sends nothing — what follows
+      # an approve (hand-test, merge) is the human's, not an agent's. Every
+      # step stays best-effort, but through cmux_log, never silently: a
+      # delivery that fails must at least say so somewhere (this exact path
+      # once failed 100% silently — see author_workspace_ref above). The
+      # status description carries the outcome too, because the PR page is
+      # the one artifact the human is already looking at.
       AUTHOR_WS=$(author_workspace_ref)
       if [ -n "$AUTHOR_WS" ]; then
-        CMUX_QUIET=1 cmux send --workspace "$AUTHOR_WS" -- \
-          "auto-review of PR #$PR: BLOCKER — read the reviewer's verdict comment on the PR, fix the blockers, then /ship to re-review.\n" \
-          >>"$LOG" 2>&1 || true
+        cmux_log workspace status set needs-attention --workspace "$AUTHOR_WS" || true
+        cmux_log todo add --workspace "$AUTHOR_WS" --origin agent \
+          "PR #$PR: fix review blockers, then /ship to re-review" || true
+        cmux_log send --workspace "$AUTHOR_WS" -- \
+          "auto-review of PR #$PR: BLOCKER — read the reviewer's verdict comment on the PR, fix the blockers, then /ship to re-review.\n" || true
+        set_status success "blocker for $SHORT — delivered to the author's workspace ($AUTHOR_WS)"
+      else
+        set_status success "blocker for $SHORT — author workspace UNRESOLVED, relay it yourself (see the log)"
       fi
       ;;
   esac
