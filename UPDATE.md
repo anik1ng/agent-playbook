@@ -92,7 +92,13 @@ difference is drift to sync — EXCEPT these declared local parts, which always 
   REMOVES a module file (`reaper.mts` and its `task:reaper` entry retired 2026-08-14,
   replaced by `worktree:gc`) removes its script line the same way. A script file no
   command can reach is the module arriving disabled, the exact failure the Class B
-  corollary above names.
+  corollary above names. The same travel rule covers `.oxfmtrc.json`'s ignore list:
+  the template names the module's files one by one (never `scripts/**` — the directory
+  also holds repo-owned scripts that must stay visible to `format:check`), so a sync
+  that adds or removes a module file edits its ignore line in the same PR. The config
+  file itself is the repo's — patterns it added beside the module's lines (its own
+  docs, Markdown) are the design working, not drift; only the module-file entries are
+  the playbook's to keep in step.
 - `ci-docs.yml` — its job `name:` and `paths:` mirror THIS repo's `ci.yml`. Where they
   mirror it they are correct; where they don't, that is a finding for the human — the
   required check hangs on some class of PR either way.

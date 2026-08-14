@@ -39,7 +39,7 @@ blocks a direct push.
 | `settings.json`              | `.claude/settings.json` (merge into existing)        |
 | `skills/{do,ship,review}/`   | `.agents/skills/<name>/SKILL.md`                     |
 | `scripts/auto-review.sh`     | `.agents/auto-review.sh` (755; only with a reviewer) |
-| `scripts/worktree/*` (11)    | `scripts/` (only when the worktree module is wanted) |
+| `scripts/worktree/*` (9)     | `scripts/` (only when the worktree module is wanted) |
 | `tooling/*` (3)              | repo root (only the ones "The static gate" installs)  |
 
 Plus three RELATIVE symlinks: `.claude/skills/<name>` → `../../.agents/skills/<name>`.
@@ -126,13 +126,17 @@ repo already formatted by Prettier converges with a near-empty diff, and its con
 migrates with `oxfmt --migrate=prettier` instead of being re-decided. There is no
 ignore file to render: it reads `.gitignore` (and a `.prettierignore` where one exists)
 and skips lockfiles natively. The template config's `ignorePatterns` ships listing the
-playbook-owned trees (`.agents`, `.claude`, `.githooks`, `.github`, the worktree
-module's `scripts/`) — those files must stay byte-identical to the playbook or every
-later sync reads the formatter's rewrite as drift; skills are Markdown and settings are
-JSON, so oxfmt WOULD rewrite them. Prune entries that don't apply — in particular,
-`scripts/**` guards the worktree module, so a repo that declined the module and keeps
-its own code there should drop that entry rather than leave its own scripts
-unformatted. It formats JSON, CSS and Markdown alongside JS/TS. Note it is pre-1.0 —
+playbook-owned files (`.agents`, `.claude`, `.githooks`, `.github` as trees, and the
+worktree module's nine files in `scripts/` BY NAME) — those files must stay
+byte-identical to the playbook or every later sync reads the formatter's rewrite as
+drift; skills are Markdown and settings are JSON, so oxfmt WOULD rewrite them. The
+module's entries are per-file, never `scripts/**`, because this workflow installs the
+module INTO `scripts/` without owning the directory: a repo's own scripts live there
+too, and a blanket ignore silently removes them from `format:check` — a gate that is
+green because it skipped the files (nsarchive ran with four of its own scripts
+invisible to the formatter this way). Prune entries that don't apply: a repo that
+declined the worktree module deletes its nine lines. It formats JSON, CSS and Markdown
+alongside JS/TS. Note it is pre-1.0 —
 the trade accepted here is formatter-output churn across versions, never correctness,
 because a formatter changes style and nothing else.
 
