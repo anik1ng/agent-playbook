@@ -78,6 +78,33 @@ set_status() { # $1 = pending|success|failure, $2 = description
 
 cmux_q() { CMUX_QUIET=1 cmux "$@" 2>/dev/null; }
 
+# The twin of cmux_q for the calls whose FAILURE has to leave a trace.
+#
+# cmux_q's `2>/dev/null` is right for the JSON readers above — cmux's own noise
+# is uninteresting when a parser is the reader — and wrong everywhere the call
+# site writes to the log, because that redirection is applied to the FUNCTION
+# CALL: the `2>/dev/null` inside then re-points fd 2 for the cmux process
+# itself, so `cmux_q … >>"$LOG" 2>&1` logs stdout and drops the error. Together
+# with a trailing `|| true` that made a 100%-reproducible reorder failure
+# invisible in every channel there is — the log, the `auto-review` status and
+# the PR page (seejs.app #52; the only artifact was a workspace in the wrong
+# place, which reads as a workflow violation rather than a bug). Best effort may
+# still mean "not fatal"; it must never mean "silent".
+cmux_log() { CMUX_QUIET=1 cmux "$@" >>"$LOG" 2>&1; }
+
+# The workspace ref inside a cmux acknowledgement line, or nothing.
+#
+# Every cmux command acknowledges on stdout with `OK <something>` — `workspace
+# create` answers `OK workspace:22`, a dry-run reorder answers `OK plan
+# workspace=… window=… index=…` — and CMUX_QUIET=1 does NOT strip that: it
+# silences the deprecation notices, nothing else. So `$(cmux_q workspace
+# create …)` is the whole line, and handing it back as a handle is refused —
+# `Invalid workspace handle: OK workspace:22 (expected UUID, ref like
+# workspace:1, or index)` [verified-by-execution, cmux 0.64.22, 2026-08-14].
+# Match the ref rather than trimming a known prefix: `OK ` is one ack shape
+# among several, and the ref is the part that has a syntax.
+cmux_ref() { sed -n 's/.*\(workspace:[0-9][0-9]*\).*/\1/p' | head -1; }
+
 # The workspace called $1, or nothing. Ambiguity answers nothing on purpose:
 # cmux does NOT refuse a duplicate name, and closing the wrong session is
 # worse than leaving both open.
@@ -290,7 +317,7 @@ if [ -z "$AUTO_REVIEW_DETACHED" ]; then
       echo "retiring the legacy reviewer worktree of #$old" >>"$LOG"
       (cd "$MAIN" && "$PKG" run worktree:teardown -- --disposable "$dir") >>"$LOG" 2>&1 || true
       ref=$(workspace_ref "review #$old")
-      [ -n "$ref" ] && cmux_q workspace close "$ref" >>"$LOG" 2>&1
+      [ -n "$ref" ] && { cmux_log workspace close "$ref" || true; }
     else
       echo "leftover reviewer worktree of #$old: $dir — remove it yourself (no worktree module to judge it)" >>"$LOG"
       CMUX_QUIET=1 cmux notify --title "auto-review: leftover worktree" \
@@ -323,7 +350,7 @@ if [ -z "$AUTO_REVIEW_DETACHED" ]; then
   OLD_WS=$(workspace_ref "$WORKSPACE")
   if [ -n "$OLD_WS" ]; then
     echo "superseding the running review ($OLD_WS)" >>"$LOG"
-    cmux_q workspace close "$OLD_WS" >>"$LOG" 2>&1
+    cmux_log workspace close "$OLD_WS" || true
   fi
 
   # Beside the author's workspaces, not at the bottom of the sidebar: the
@@ -332,35 +359,42 @@ if [ -z "$AUTO_REVIEW_DETACHED" ]; then
   CALLER_WS=$(caller_workspace_ref)
   GROUP=$(caller_group_ref "$CALLER_WS")
   if [ -n "$GROUP" ]; then
-    NEW_WS=$(cmux_q workspace create \
+    NEW_ACK=$(cmux_q workspace create \
       --name "$WORKSPACE" \
       --cwd "$WORKTREE" \
       --group "$GROUP" \
       --group-placement end \
       --command "AUTO_REVIEW_DETACHED=1 '$MAIN/.agents/auto-review.sh' $PR")
   else
-    NEW_WS=$(cmux_q workspace create \
+    NEW_ACK=$(cmux_q workspace create \
       --name "$WORKSPACE" \
       --cwd "$WORKTREE" \
       --command "AUTO_REVIEW_DETACHED=1 '$MAIN/.agents/auto-review.sh' $PR")
   fi
-  if [ -z "$NEW_WS" ]; then
+  if [ -z "$NEW_ACK" ]; then
     echo "cmux refused to create the workspace." >>"$LOG"
     set_status failure "reviewer workspace could not be created — see the log"
     echo "auto-review: cmux refused to create the workspace (see $LOG)" >&2
     exit 1
   fi
+  # The ack is `OK workspace:N`, and only the ref half is a handle. Parsed
+  # separately from the guard above on purpose: an unparseable ack means the
+  # workspace EXISTS and the review is already running in it, so it downgrades
+  # the placement and says so — it is not a failed launch.
+  NEW_WS=$(printf '%s\n' "$NEW_ACK" | cmux_ref)
 
   # Directly UNDER its author, not at the group's end: with several tasks in
   # flight, "end" parks task A's review below task C. Reorder AFTER create,
   # never an anchor on create itself — `--group-reference` refuses a dead ref
   # and the whole create fails with it, whereas a reorder against a vanished
   # author refuses harmlessly and the review simply stays where create put it.
-  if [ -n "$CALLER_WS" ]; then
-    cmux_q reorder-workspace --workspace "$NEW_WS" --after "$CALLER_WS" \
-      >>"$LOG" 2>&1 || true
+  if [ -z "$NEW_WS" ]; then
+    echo "no workspace ref in the create ack ($NEW_ACK) — not reordering" >>"$LOG"
+  elif [ -n "$CALLER_WS" ]; then
+    cmux_log reorder-workspace --workspace "$NEW_WS" --after "$CALLER_WS" \
+      || echo "reorder-workspace refused (exit $?) — the review stays where create put it" >>"$LOG"
   fi
-  echo "workspace “$WORKSPACE” created ($NEW_WS)" >>"$LOG"
+  echo "workspace “${WORKSPACE}” created (${NEW_WS:-$NEW_ACK})" >>"$LOG"
   exit 0
 fi
 
