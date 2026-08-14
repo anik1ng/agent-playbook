@@ -39,10 +39,12 @@ in this page — file it.
   restart it yourself after a merge.
 - **When a verdict lands** _(cmux; delete this line if this machine has none)_: the
   auto-review launcher announces it by itself — a desktop notification
-  (`Review #<pr>` / `VERDICT: …`), and on an approve the PR page opens as a background
-  tab in the reviewer's workspace, already waiting when you switch over. Automatic,
-  best-effort, nothing to configure; no cmux → no announcements, everything else
-  unchanged. If you ever wire more notifications, wire them to EVENTS (a verdict landed),
+  (`Review #<pr>` / `VERDICT: …`); on an approve the PR page opens as a background
+  tab in the reviewer's workspace, already waiting when you switch over; on a blocker
+  the author's task workspace flips to the `needs-attention` sidebar lane, gets a
+  checklist item, and its live session receives the fix instruction as a user message.
+  Automatic, best-effort, nothing to configure; no cmux → no announcements, everything
+  else unchanged. If you ever wire more notifications, wire them to EVENTS (a verdict landed),
   never to every tool call: a notify per "ask" against a broad allowlist announces
   prompts that never come — once per command, for the whole review. Per-ask announcements
   pair only with a NARROW allowlist: both or neither.
@@ -168,10 +170,13 @@ because neither half can do the other's job:
   before you merge.
 - Where `.agents/auto-review.sh` is installed, `/ship` starts that reviewer for you — on
   the PR's creation and on every fix push — so your part is only reading the verdict
-  comments. A **blocker** verdict additionally messages the author's own task workspace
-  ("fix the blockers, then /ship") — expect that session to start working on the fixes
-  before you have read anything; an **approve** messages nobody, since what follows it
-  (your hand-test, your merge) is yours. Expect ONE question EVER, not one per PR: the very first review in this
+  comments. A **blocker** verdict additionally reaches the author's own task workspace on
+  three channels: the workspace flips to the `needs-attention` sidebar lane and gets a
+  checklist item ("PR #N: fix review blockers, then /ship") — both of which survive a
+  closed session — and a live session there receives "fix the blockers, then /ship" as a
+  user message, so expect it to start working on the fixes before you have read anything.
+  An **approve** messages nobody, since what follows it (your hand-test, your merge) is
+  yours. Expect ONE question EVER, not one per PR: the very first review in this
   repository opens with a folder-trust prompt in its `review #<pr>` workspace, because
   the reviewer CLI trusts directories and all reviews share one worktree. Answer it once
   and every later review runs unattended. **A prompt on the second PR is a
