@@ -89,10 +89,18 @@ describe("dropLeadingSeparators", () => {
 });
 
 describe("ALLOWED_ENV_VARS", () => {
-  test("ships EMPTY — every copied variable is an explicit local decision", () => {
-    // The template's contract: nothing leaks into a worktree (including a
-    // reviewer's worktree) until someone deliberately adds a key here.
-    expect([...ALLOWED_ENV_VARS]).toEqual([]);
+  test("never allowlists a secret-shaped key — the LIST is local, the SAFETY is not", () => {
+    // This test used to pin the list to exactly [] — but the list is a
+    // DECLARED LOCAL PART (UPDATE.md): a repo that filled it in, as the
+    // module intends, went red on its very next sync of this Class A file
+    // (nsarchive, second sync). So the assertion is on the property that is
+    // NOT local: no key naming a secret or a privileged role may ever leak
+    // into a worktree — a reviewer's worktree included, where another
+    // vendor's model does the reading. A legitimate key that trips this
+    // pattern is a naming conversation to have, not a reason to widen it.
+    for (const key of ALLOWED_ENV_VARS) {
+      expect(key).not.toMatch(/SECRET|KEY|TOKEN|PASSW|PRIVATE|CREDENTIAL|MIGRATION/i);
+    }
   });
 });
 
@@ -117,8 +125,12 @@ describe("filterEnv", () => {
     expect(text).not.toContain("live_key");
   });
 
-  test("with the shipped default (empty), copies NOTHING", () => {
-    const { copied, skipped, text } = filterEnv(MAIN_ENV);
+  test("with an EMPTY allowlist, copies NOTHING", () => {
+    // An explicit [], not the module default: the default is
+    // ALLOWED_ENV_VARS, whose contents are a repo's local decision (see
+    // above) — what this pins is the mechanism's posture when nothing has
+    // been allowed yet.
+    const { copied, skipped, text } = filterEnv(MAIN_ENV, []);
 
     expect(copied).toEqual([]);
     expect(skipped).toContain("DATABASE_URL");
