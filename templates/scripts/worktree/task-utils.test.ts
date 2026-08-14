@@ -5,6 +5,8 @@ import {
   buildLayout,
   findCallerGroup,
   findWorkspace,
+  resolveTaskWorkspace,
+  taskNameFromWorktreePath,
   validateTaskName,
   workspaceRefFromAck,
   worktreePathFor,
@@ -66,6 +68,40 @@ describe("worktreePathFor", () => {
   });
 });
 
+describe("taskNameFromWorktreePath", () => {
+  test("inverts worktreePathFor", () => {
+    const main = "/Users/x/Projects/TS/myrepo";
+    expect(
+      taskNameFromWorktreePath(main, worktreePathFor(main, "probe")),
+    ).toBe("probe");
+  });
+
+  test("answers null for the main checkout itself and for unrelated siblings", () => {
+    const main = "/Users/x/Projects/TS/myrepo";
+    expect(taskNameFromWorktreePath(main, main)).toBeNull();
+    expect(taskNameFromWorktreePath(main, "/Users/x/Projects/TS/other-dir")).toBeNull();
+  });
+
+  test("answers null for a worktree parked OUTSIDE the sibling convention", () => {
+    // A `-wt-` directory elsewhere on disk is not ours to name: retiring by a
+    // guessed name would aim task:finish at whatever happens to be at
+    // `<sibling>/<repo>-wt-<name>` instead of the directory the caller is in.
+    const main = "/Users/x/Projects/TS/myrepo";
+    expect(
+      taskNameFromWorktreePath(main, "/Users/x/elsewhere/myrepo-wt-probe"),
+    ).toBeNull();
+  });
+
+  test("answers null when the suffix is not a valid task name", () => {
+    // worktreePathFor never creates these, so whatever made the directory
+    // was not task:start — the degenerate "strip the prefix" implementation
+    // would happily hand `--force` onwards as a name.
+    const main = "/Users/x/myrepo";
+    expect(taskNameFromWorktreePath(main, "/Users/x/myrepo-wt---force")).toBeNull();
+    expect(taskNameFromWorktreePath(main, "/Users/x/myrepo-wt-")).toBeNull();
+  });
+});
+
 describe("findWorkspace", () => {
   const workspaces: ListedWorkspace[] = [
     { ref: "workspace:1", custom_title: "Group 1", title: "Group 1" },
@@ -103,6 +139,87 @@ describe("findWorkspace", () => {
       kind: "ambiguous",
       refs: ["workspace:11", "workspace:12"],
     });
+  });
+});
+
+describe("resolveTaskWorkspace", () => {
+  const worktree = "/Users/x/myrepo-wt-9";
+  const workspaces: ListedWorkspace[] = [
+    { ref: "workspace:1", title: "myrepo", current_directory: "/Users/x/myrepo" },
+    { ref: "workspace:20", title: "do #9 loop guard", current_directory: worktree },
+  ];
+
+  test("falls back to the cwd when no title matches — the renamed-workspace case", () => {
+    // The bug this pins: a task workspace renamed to "do #9 loop guard" was
+    // unfindable by its task name "9", so the teardown ran and the workspace
+    // stayed open. The cwd is the key cmux itself uses.
+    expect(resolveTaskWorkspace(workspaces, "9", worktree)).toEqual({
+      kind: "one",
+      ref: "workspace:20",
+    });
+  });
+
+  test("prefers the title match when there is one", () => {
+    const titled = [
+      ...workspaces,
+      { ref: "workspace:30", title: "9", current_directory: "/somewhere/else" },
+    ];
+    expect(resolveTaskWorkspace(titled, "9", worktree)).toEqual({
+      kind: "one",
+      ref: "workspace:30",
+    });
+  });
+
+  test("matches a workspace whose cwd is a SUBDIRECTORY of the worktree", () => {
+    // A pane that cd'd into src/ still belongs to the task.
+    const deep: ListedWorkspace[] = [
+      { ref: "workspace:2", title: "renamed", current_directory: `${worktree}/src` },
+    ];
+    expect(resolveTaskWorkspace(deep, "9", worktree)).toEqual({
+      kind: "one",
+      ref: "workspace:2",
+    });
+  });
+
+  test("does NOT rescue an ambiguous title match via cwd", () => {
+    // Two workspaces claiming one name is a stop, not a tie to break.
+    const duplicated = [
+      ...workspaces,
+      { ref: "workspace:31", title: "9", current_directory: null },
+      { ref: "workspace:32", title: "9", current_directory: worktree },
+    ];
+    expect(resolveTaskWorkspace(duplicated, "9", worktree)).toEqual({
+      kind: "ambiguous",
+      refs: ["workspace:31", "workspace:32"],
+    });
+  });
+
+  test("reports cwd-ambiguity instead of closing one of two", () => {
+    const doubled = [
+      ...workspaces,
+      { ref: "workspace:21", title: "also renamed", current_directory: worktree },
+    ];
+    expect(resolveTaskWorkspace(doubled, "9", worktree)).toEqual({
+      kind: "ambiguous",
+      refs: ["workspace:20", "workspace:21"],
+    });
+  });
+
+  test("reports none without a worktree path to compare against", () => {
+    expect(resolveTaskWorkspace(workspaces, "9", null)).toEqual({ kind: "none" });
+  });
+
+  test("never cwd-matches the main checkout's workspace", () => {
+    // "/Users/x/myrepo" is not inside "/Users/x/myrepo-wt-9" — the
+    // string-prefix implementation gets this wrong in the other direction:
+    // a worktree path that PREFIXES another directory's name.
+    expect(
+      resolveTaskWorkspace(
+        [{ ref: "workspace:5", title: "x", current_directory: "/Users/x/myrepo-wt-99" }],
+        "9",
+        worktree,
+      ),
+    ).toEqual({ kind: "none" });
   });
 });
 

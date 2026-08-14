@@ -7,10 +7,13 @@
  * the facts and passes them in, and the parts worth pinning are the ones that
  * decide where a directory is created and which workspace gets CLOSED.
  *
- * Imports nothing but node builtins — `task:start` runs `worktree:setup` in a
- * worktree that has no `node_modules` yet, and must itself run in one too.
+ * Imports nothing but node builtins and the pure module beside it —
+ * `task:start` runs `worktree:setup` in a worktree that has no `node_modules`
+ * yet, and must itself run in one too.
  */
 import path from "node:path";
+
+import { isInside } from "./worktree-utils.mts";
 
 /**
  * The agent the left pane starts. Overridable via TASK_AGENT_CMD because
@@ -49,6 +52,30 @@ export function worktreePathFor(mainCheckout: string, name: string): string {
 }
 
 /**
+ * The task name a worktree path encodes, or `null` when the path is not a
+ * `<repo-dir-name>-wt-<name>` SIBLING of this main checkout — the exact
+ * inverse of `worktreePathFor`, and the same convention, so the two cannot
+ * drift apart without one of them failing its tests.
+ *
+ * This is what lets `task:finish -- --here` be run with no argument from
+ * inside the worktree being retired: the directory already names the task.
+ * A path that merely CONTAINS `-wt-` somewhere else on disk answers `null` —
+ * a worktree parked outside the convention is invisible to `--sweep` too,
+ * and guessing a name for it would retire the wrong thing.
+ */
+export function taskNameFromWorktreePath(
+  mainCheckout: string,
+  worktreePath: string,
+): string | null {
+  if (path.dirname(worktreePath) !== path.dirname(mainCheckout)) return null;
+  const prefix = `${path.basename(mainCheckout)}-wt-`;
+  const dirName = path.basename(worktreePath);
+  if (!dirName.startsWith(prefix)) return null;
+  const name = dirName.slice(prefix.length);
+  return validateTaskName(name) === null ? name : null;
+}
+
+/**
  * One workspace as `cmux workspace list --json` reports it.
  *
  * `title` is the field to match on: cmux always populates it — with the
@@ -56,11 +83,20 @@ export function worktreePathFor(mainCheckout: string, name: string): string {
  * a derived name otherwise, where `custom_title` is null
  * [verified-by-execution, cmux 0.64.22, 2026-08-10]. `custom_title` is
  * declared here because the JSON carries it, not because anything reads it.
+ *
+ * `current_directory` is the workspace's cwd as cmux reports it. It is the
+ * STABLE key: a title is a human-readable field that gets renamed by
+ * definition (a real blocker announcement was lost to exactly that — the
+ * author's workspace was called "do #9 loop guard", not "9"), while the
+ * cwd is how cmux itself identifies the workspace in `workspace.closed`
+ * payloads. Title first for compatibility, cwd as the fallback that
+ * survives a rename — see `resolveTaskWorkspace`.
  */
 export type ListedWorkspace = {
   ref: string;
   title: string;
   custom_title?: string | null;
+  current_directory?: string | null;
 };
 
 export type WorkspaceMatch =
@@ -83,6 +119,48 @@ export function findWorkspace(
 ): WorkspaceMatch {
   const refs = workspaces
     .filter((workspace) => workspace.title === name)
+    .map((workspace) => workspace.ref);
+
+  if (refs.length === 0) return { kind: "none" };
+  if (refs.length === 1) return { kind: "one", ref: refs[0] };
+  return { kind: "ambiguous", refs };
+}
+
+/**
+ * Find the workspace belonging to task `name` whose worktree is at
+ * `worktreePath`: by title first (the historical key, still right wherever
+ * nobody renamed anything), then by `current_directory` when the title
+ * match comes up EMPTY.
+ *
+ * The fallback exists because titles get renamed and cwds do not: a task
+ * workspace renamed to "do #9 loop guard" is unfindable by title "9", but
+ * its cwd is still the worktree. The fallback never overrides a title
+ * match — including an ambiguous one, which stays a refusal rather than
+ * being "rescued" by cwd, because two workspaces claiming one name is a
+ * situation to stop on, not to guess through.
+ *
+ * `worktreePath` and every `current_directory` must be normalized by the
+ * CALLER (realpath where the directory exists) — this module has no
+ * filesystem on purpose. Containment rather than equality, because a
+ * workspace's reported cwd can be a pane's subdirectory of the worktree.
+ * Ambiguity by cwd is a real outcome too (two workspaces opened on one
+ * worktree) and closes nothing, same as by title.
+ */
+export function resolveTaskWorkspace(
+  workspaces: readonly ListedWorkspace[],
+  name: string,
+  worktreePath: string | null,
+): WorkspaceMatch {
+  const byTitle = findWorkspace(workspaces, name);
+  if (byTitle.kind !== "none" || worktreePath === null) return byTitle;
+
+  const refs = workspaces
+    .filter(
+      (workspace) =>
+        typeof workspace.current_directory === "string" &&
+        workspace.current_directory !== "" &&
+        isInside(workspace.current_directory, worktreePath),
+    )
     .map((workspace) => workspace.ref);
 
   if (refs.length === 0) return { kind: "none" };
