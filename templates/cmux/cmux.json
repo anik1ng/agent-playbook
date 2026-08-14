@@ -1,0 +1,13 @@
+{
+  "$comment": "Template for `.cmux/cmux.json` at an adopted repo's root — render {{PKG_MANAGER}} at adoption and COMMIT the file. cmux resolves it per active-pane cwd (ancestor lookup), so the action exists in every worktree of the repo automatically, main checkout included, and appears in the Command Palette (⌘⇧P). `target: newTabInCurrentPane` runs the command as shell input in a new tab of the current pane — inside the task's own workspace, which is exactly what `--here` is built for: it detaches itself before the workspace it is about to close can kill it. cmux asks a one-time trust question on the action's first run; that is its model for project-local actions. Action shape [read-in-source, cmux dogfood/directory-actions, 2026-08-14].",
+  "actions": {
+    "playbook.finishTask": {
+      "type": "command",
+      "title": "Finish task",
+      "subtitle": "Retire this worktree: teardown, branch verdict, close the workspace",
+      "command": "{{PKG_MANAGER}} run task:finish -- --here",
+      "target": "newTabInCurrentPane",
+      "icon": { "type": "emoji", "value": "✅" }
+    }
+  }
+}
