@@ -117,6 +117,28 @@ export function findCallerGroup(
 }
 
 /**
+ * The workspace ref inside a cmux acknowledgement line, or `null`.
+ *
+ * Every cmux command acknowledges on stdout with `OK <something>` — `workspace
+ * create` answers `OK workspace:22` — and CMUX_QUIET=1 does NOT strip that
+ * prefix: it silences the deprecation notices, nothing else
+ * [verified-by-execution, cmux 0.64.22, 2026-08-14]. So the captured output of
+ * a create is the whole line, and the ref half is the only part that is a
+ * HANDLE: cmux refuses the rest — `Invalid workspace handle: OK workspace:22
+ * (expected UUID, ref like workspace:1, or index)`. That refusal is what left
+ * `auto-review.sh` parking every reviewer at the end of its group instead of
+ * under its author. Here the leak was only cosmetic (a console line reading
+ * `created (OK workspace:22)`), but it is the same ack and the same trap, so
+ * both sides now parse rather than trust.
+ *
+ * Matches the ref instead of trimming a known prefix — `OK ` is one ack shape
+ * among several, and the ref is the part that has a syntax.
+ */
+export function workspaceRefFromAck(ack: string | null): string | null {
+  return ack?.match(/workspace:\d+/)?.[0] ?? null;
+}
+
+/**
  * The split the human asked for: an agent on the left, an EMPTY terminal on
  * the right. The right pane carries no `command` on purpose — it is the shell
  * you drop into to run a query or read a log while the agent works.

@@ -29,6 +29,7 @@ import {
   findCallerGroup,
   findWorkspace,
   validateTaskName,
+  workspaceRefFromAck,
   worktreePathFor,
   type ListedGroup,
   type ListedWorkspace,
@@ -249,8 +250,14 @@ if (listed === null) {
         `\n• workspace NOT created: cmux refused. The worktree is ready at ${target}.\n`,
       );
     } else {
+      // cmux acknowledges with `OK workspace:N`; print the ref, not the ack.
+      // Nothing here uses it as a handle, so the raw line was only ugly — but
+      // it is the same ack whose `OK ` prefix silently broke auto-review.sh's
+      // reorder, and one of the two call sites printing it verbatim is how
+      // that shape reads as normal.
+      const ref = workspaceRefFromAck(created) ?? created;
       console.log(
-        `\n• workspace “${name}” created (${created}) — ${agentCommand} + a shell`,
+        `\n• workspace “${name}” created (${ref}) — ${agentCommand} + a shell`,
       );
     }
   }

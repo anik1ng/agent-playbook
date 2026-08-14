@@ -6,6 +6,7 @@ import {
   findCallerGroup,
   findWorkspace,
   validateTaskName,
+  workspaceRefFromAck,
   worktreePathFor,
   type ListedWorkspace,
 } from "./task-utils.mts";
@@ -132,6 +133,44 @@ describe("findCallerGroup", () => {
     expect(
       findCallerGroup([{ ref: "workspace_group:3" }], "workspace:2"),
     ).toBeNull();
+  });
+});
+
+describe("workspaceRefFromAck", () => {
+  test("takes the ref out of what cmux actually answers", () => {
+    // The whole point: `workspace create` answers `OK workspace:22`, and
+    // CMUX_QUIET=1 does not strip that prefix. Passing the ack back as a
+    // handle is refused ("Invalid workspace handle"), which is how a reorder
+    // that looked right silently did nothing.
+    expect(workspaceRefFromAck("OK workspace:22")).toBe("workspace:22");
+  });
+
+  test("survives an ack that has already lost the prefix", () => {
+    expect(workspaceRefFromAck("workspace:1")).toBe("workspace:1");
+  });
+
+  test("finds the ref in a wordier acknowledgement", () => {
+    // Other cmux verbs acknowledge differently (`reorder-workspace
+    // --dry-run` answers `OK plan workspace=… window=… index=…`), which is
+    // why this matches the ref's syntax rather than trimming a known prefix.
+    expect(
+      workspaceRefFromAck("OK plan workspace=workspace:22 window=window:1"),
+    ).toBe("workspace:22");
+  });
+
+  test("answers null when there is no ref to find", () => {
+    // The degenerate "strip the first two characters" implementation passes
+    // every case above and fails these: a caller that gets a non-ref back
+    // hands cmux garbage instead of skipping the placement.
+    expect(workspaceRefFromAck(null)).toBeNull();
+    expect(workspaceRefFromAck("")).toBeNull();
+    expect(workspaceRefFromAck("Error: cmux is not running")).toBeNull();
+  });
+
+  test("does not mistake a GROUP ref for a workspace ref", () => {
+    // `workspace_group:2` contains the word but is a different handle space —
+    // reordering a group where a workspace was meant moves the wrong thing.
+    expect(workspaceRefFromAck("OK workspace_group:2")).toBeNull();
   });
 });
 
