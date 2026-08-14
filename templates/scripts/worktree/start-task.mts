@@ -96,6 +96,28 @@ const mainCheckout = realpathSync(worktrees[0].path);
 const target = worktreePathFor(mainCheckout, name);
 const pkg = packageManagerFromLockfiles(readdirSync(mainCheckout));
 
+// ---------------------------------------------------------------------------
+// 0. Sweep up first — retire finished tasks nobody said goodbye to
+//
+// Starting new work is the natural moment to collect the old: worktree:gc
+// compares disk against open workspaces and retires only what is provably
+// DONE (see gc-worktrees.mts). Best-effort on purpose — a broken or slow
+// gc must never stop a task from starting. Before the exists-check below,
+// so a finished worktree still occupying THIS task's name frees it now.
+// ---------------------------------------------------------------------------
+
+console.log(`• ${pkg} run worktree:gc\n`);
+try {
+  execFileSync(pkg, ["run", "worktree:gc"], {
+    cwd: mainCheckout,
+    stdio: "inherit",
+    timeout: 300_000,
+  });
+} catch {
+  console.log("  (gc did not finish — carrying on; run it yourself later.)");
+}
+console.log("");
+
 if (existsSync(target)) {
   fail(
     `${target} already exists.\n` +
@@ -274,7 +296,11 @@ console.log(
     `  When it lands, from ${path.basename(mainCheckout)}:`,
     `         ${pkg} run task:finish -- ${name}`,
     "",
-    "  (that supersedes the `worktree:teardown` line printed by setup above —",
+    "  — or from inside the task's own workspace (⌘⇧P → “Finish task” where",
+    "  the repo carries .cmux/cmux.json):",
+    `         ${pkg} run task:finish -- --here`,
+    "",
+    "  (either supersedes the `worktree:teardown` line printed by setup above —",
     "   task:finish runs it AND closes the workspace, in that order.)",
     "",
   ].join("\n"),

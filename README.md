@@ -49,7 +49,7 @@ docs/RUNBOOK.md                    the human's page: what YOU run and remember (
 .claude/settings.json              no AI-attribution trailers; allows the reviewer launch
 .agents/skills/{do,ship,review}/   the protocols; .claude/skills/* symlink to them
 .agents/auto-review.sh             optional: /ship starts the cross-family reviewer itself
-scripts/*.mts                      optional worktree module: task:start / task:finish / task:reaper
+scripts/*.mts                      optional worktree module: task:start / task:finish / worktree:gc
 ```
 
 **`/do <n>` is the one command to remember.** It reads the issue and decides what it

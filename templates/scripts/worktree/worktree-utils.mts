@@ -312,7 +312,7 @@ export type RetireDecision = {
  * The bar is deliberately HIGHER than `classifyBranch`'s: that predicate
  * answers "can deleting this lose work?", and a branch that is fully pushed
  * with its PR still OPEN passes it — origin holds every commit, nothing is
- * lost. But it is exactly the branch a reaper must not touch: closing a
+ * lost. But it is exactly the branch a collector must not touch: closing a
  * workspace to tidy the sidebar while the PR waits on review must stay a
  * free action, or review blockers come back to a worktree that no longer
  * exists. So "safe to delete" is not enough here; only "provably DONE"
@@ -320,8 +320,9 @@ export type RetireDecision = {
  * the branch's tip.
  *
  * A dirty tree on a provably merged branch gets its own kind: that is the
- * one refusal worth announcing (the task looks finished, the reaper stayed
- * its hand), where an unfinished branch's refusal is the silent normal case.
+ * one refusal worth announcing (the task looks finished, the collector
+ * stayed its hand), where an unfinished branch's refusal is the silent
+ * normal case.
  */
 export function classifyRetirable(facts: RetireFacts): RetireDecision {
   if (facts.branch === null || facts.branchFacts === null) {
@@ -374,6 +375,75 @@ export function classifyRetirable(facts: RetireFacts): RetireDecision {
   }
 
   return { kind: "retire", reason: merged };
+}
+
+export type RetireOutcome =
+  /** The worktree was removed and its branch deleted. */
+  | "retired"
+  /** Provably merged, but uncommitted changes stayed the collector's hand. */
+  | "kept-finished-but-dirty"
+  /** Unfinished or detached — the silent, normal refusal. */
+  | "kept"
+  /** No verdict line at all — the teardown broke; somebody should look. */
+  | "unrecognized";
+
+/**
+ * Reads `worktree:teardown -- --only-finished`'s verdict line out of its
+ * output. The line's shape is a contract between the two scripts —
+ * teardown-worktree.mts says so at the spot that prints it.
+ */
+export function parseRetireOutcome(output: string): RetireOutcome {
+  const match = /^only-finished: (retired|kept \((finished-but-dirty|unfinished|detached)\))/m.exec(
+    output,
+  );
+  if (match === null) return "unrecognized";
+  if (match[1] === "retired") return "retired";
+  return match[2] === "finished-but-dirty" ? "kept-finished-but-dirty" : "kept";
+}
+
+export type GcFacts = {
+  /** Linked worktrees as git lists them, the main checkout EXCLUDED by the caller. */
+  worktrees: ListedWorktree[];
+  /**
+   * The cwd of every OPEN workspace, normalized by the caller (realpath
+   * where the directory exists) — or `null` when the workspace manager
+   * could not be asked at all. `null` and `[]` are different answers on
+   * purpose: an empty list means "asked, none open", no list means the
+   * question did not run.
+   */
+  openDirectories: string[] | null;
+};
+
+/**
+ * The worktrees a collector may OFFER to `--only-finished` — the state
+ * reconciliation that replaced the event-listening reaper: instead of
+ * catching every `workspace.closed` (a daemon, a cursor, and still blind
+ * to closes that emit no event, like quitting the app), compare what is on
+ * disk with what is open right now. A worktree nobody has a workspace on
+ * is exactly the set the reaper listened for, however it got that way.
+ *
+ * Three refusals, all structural:
+ *  - `openDirectories === null`: no workspace list means every worktree
+ *    might be someone's open session — offer NOTHING. Fail closed.
+ *  - a worktree an open workspace sits in (cwd equal or inside): someone
+ *    is working there, whatever the branch state says.
+ *  - detached or prunable entries: a reviewer's checkout is scratch by
+ *    construction and `--sweep`'s to report; a prunable registration has
+ *    no directory to judge.
+ *
+ * This function only NOMINATES. Whether a candidate is actually retired is
+ * `classifyRetirable`'s verdict, made by the teardown it is handed to —
+ * the same division of labour the reaper had.
+ */
+export function gcCandidates(facts: GcFacts): ListedWorktree[] {
+  if (facts.openDirectories === null) return [];
+  const open = facts.openDirectories;
+  return facts.worktrees.filter(
+    (worktree) =>
+      worktree.branch !== null &&
+      !worktree.prunable &&
+      !open.some((dir) => isInside(dir, worktree.path)),
+  );
 }
 
 export type DisposableFacts = {

@@ -313,23 +313,32 @@ opens a cmux workspace where one is available; `task:finish <name>` retires it, 
 to delete anything that could hold the only copy of work; `worktree:teardown --sweep`
 reports leftovers and never deletes a branch on its own.
 
-If yes: install the eleven files into `scripts/` and wire `package.json` (Rule 0 applies
+If yes: install the nine files into `scripts/` and wire `package.json` (Rule 0 applies
 to an existing `scripts` block):
 
     "task:start": "node scripts/start-task.mts",
     "task:finish": "node scripts/finish-task.mts",
-    "task:reaper": "node scripts/reaper.mts",
     "worktree:setup": "node scripts/setup-worktree.mts",
-    "worktree:teardown": "node scripts/teardown-worktree.mts"
+    "worktree:teardown": "node scripts/teardown-worktree.mts",
+    "worktree:gc": "node scripts/gc-worktrees.mts"
 
-The module also carries the **workspace reaper** — `task:reaper`, a long-running
-listener the HUMAN starts, ONE per machine, that retires a task when its cmux
-workspace closes and the task is provably finished (merged PR containing the branch
-tip, clean tree; everything else is left untouched). It is cmux-gated and optional to
-RUN, not to install: the script ships either way, and `docs/RUNBOOK.md`'s worktree
-section describes starting it — that section is part of rendering the RUNBOOK when
-the module is accepted. Never start it yourself; long-running processes are the
-human's (see "Servers and scripts" in the AGENTS.md template).
+The module also carries the **worktree collector** — `worktree:gc`, a ONE-SHOT
+reconciliation that retires tasks nobody said goodbye to: it compares the worktrees on
+disk with the workspaces open in cmux and hands every closed-but-present one to
+`worktree:teardown --only-finished`, which acts only on PROOF of done (merged PR
+containing the branch tip, clean tree) and refuses everything else untouched.
+`task:start` runs one in its preamble, so the collection is nobody's job — there is no
+long-running process anywhere in this module (its predecessor, a `task:reaper` daemon
+the human had to keep alive, was retired 2026-08-14 for exactly that reason). The gc's
+deletions are covered by the module's own predicate, not by an agent's judgement — that
+is what keeps it inside the AGENTS.md rule about deleting working copies.
+
+Where cmux is present, also install `templates/cmux/cmux.json` as `.cmux/cmux.json` at
+the repo root (rendering `{{PKG_MANAGER}}`) and commit it: it puts a **Finish task**
+entry into cmux's command palette for every workspace whose cwd is in this repo — the
+palette form of `task:finish -- --here`, which retires the current task from inside its
+own workspace. cmux asks a one-time trust question on the action's first run; that is
+its model for project-local actions, tell the human to expect it.
 
 **If no — and the reviewer IS installed — say so in `docs/RUNBOOK.md`, in the same
 breath.** `auto-review.sh` delegates every force-removal to this module and refuses to

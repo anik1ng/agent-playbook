@@ -253,7 +253,11 @@ local default branch is current — `git fetch` first.
 <!-- Customize: append a line the first time an agent does something you had to undo by hand. -->
 
 - Force-pushing or rewriting `{{DEFAULT_BRANCH}}`.
-- Deleting branches or working copies you didn't create.
+- Deleting branches or working copies you didn't create. (The worktree module's own
+  commands — `task:finish`, `worktree:gc` — are the sanctioned path THROUGH this rule,
+  not around it: they delete only behind a predicate that proves the deletion loses
+  nothing, and they refuse everything else. Running them is fine; forcing past one of
+  their refusals is exactly this rule.)
 - Merging over unresolved conflicts.
 - Applying a schema change to shared state outside the rule above.
 - Bypassing the pre-push hook.

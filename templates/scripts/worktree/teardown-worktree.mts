@@ -25,9 +25,9 @@
  * `--only-finished` inverts the default posture: instead of "remove unless
  * git refuses", it is "refuse unless the task is provably DONE" — a merged
  * PR containing the branch tip, on a clean tree. Gated by
- * `classifyRetirable()`; built for the workspace reaper (reaper.mts), which
- * hangs this on every closed cmux workspace and therefore must never turn
- * closing a workspace into a destructive act.
+ * `classifyRetirable()`; built for the worktree collector (gc-worktrees.mts),
+ * which hangs this on every worktree with no open workspace and therefore
+ * must never turn a closed workspace into a destructive act.
  *
  * Imports nothing but node builtins (see worktree-utils.mts).
  */
@@ -428,10 +428,11 @@ if (isInside(cwd, target.path)) {
 // ---------------------------------------------------------------------------
 //
 // This mode exists so teardown can hang on an IMPLICIT gesture — a workspace
-// closing (see reaper.mts) — instead of an explicit command. Its verdict line
-// is therefore a machine contract, parsed by reaper-utils.mts:
+// having been closed (see gc-worktrees.mts) — instead of an explicit command.
+// Its verdict line is therefore a machine contract, parsed by
+// `parseRetireOutcome` in worktree-utils.mts:
 // `only-finished: retired — …` / `only-finished: kept (<kind>) — …`.
-// Changing that shape silently breaks the reaper's notifications.
+// Changing that shape silently breaks the collector's notifications.
 
 if (values["only-finished"]) {
   const dirty =

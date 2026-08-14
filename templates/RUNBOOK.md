@@ -65,18 +65,23 @@ in this page — file it.
   the worktree, deletes the branch ONLY when that provably loses nothing (merged PR
   containing the tip, or everything pushed), closes the workspace last. A refusal means
   uncommitted work is in there — that refusal is the safety net, don't force it.
-- **Or just close the workspace** — where the reaper is running. `{{PKG_MANAGER}} run
-  task:reaper` is a long-running listener, ONE per machine (any adopted repo's copy
-  serves them all): every closed cmux workspace whose directory is a task worktree gets
-  judged, and a task that is provably DONE — merged PR containing the branch tip, clean
-  tree — is retired on the spot (worktree removed, branch deleted, desktop notification).
-  Anything less than proof is left untouched, so closing the workspace of a task still
-  in review stays free, and a merged task with uncommitted leftovers announces itself
-  instead of being cleaned. You start the reaper and you keep it running — a terminal
-  you leave open, or a launchd agent (`~/Library/LaunchAgents/`, a plist that runs
-  `{{PKG_MANAGER}} run task:reaper` in this repo with `KeepAlive`; remember launchd's
-  PATH knows nothing about your shell — point it at absolute paths). Closes that happen
-  while it is down are what `--sweep` below catches.
+- **Or finish from INSIDE the task**: `{{PKG_MANAGER}} run task:finish -- --here`, typed
+  in the task's own workspace (no name needed — the worktree names the task). It detaches
+  itself, runs the same teardown, and closes the very workspace you typed it in; the
+  outcome arrives as a desktop notification, and the record lands in
+  `.git/task-finish-<name>.log`. If the repo carries `.cmux/cmux.json`, the same command
+  is the **Finish task** entry in cmux's ⌘⇧P palette (first run asks a one-time trust
+  question — that is cmux's own model for project-local actions). A refusal (uncommitted
+  work) leaves the workspace open and says so in the notification.
+- **Forgot to finish? Nothing to do.** `{{PKG_MANAGER}} run worktree:gc` compares the
+  worktrees on disk with the workspaces open in cmux and retires every task that has no
+  open workspace AND is provably DONE — merged PR containing the branch tip, clean tree.
+  Anything less than proof is left untouched, so closing a workspace mid-review stays a
+  free gesture, and a merged task with uncommitted leftovers announces itself instead of
+  being cleaned. `task:start` runs a gc in its preamble, so starting the next task sweeps
+  up after the finished ones — there is no daemon to keep running, and closes that happen
+  with cmux quit entirely are caught the same way, because gc reads current state, not
+  events.
 - **Tidy up leftovers**: `{{PKG_MANAGER}} run worktree:teardown -- --sweep` — reports
   stale registrations, stray directories and orphaned branches; prints deletion commands
   but never deletes a branch itself.

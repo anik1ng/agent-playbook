@@ -9,11 +9,14 @@ import {
   computeOrphans,
   envKeys,
   filterEnv,
+  gcCandidates,
   isInside,
   packageManagerFromLockfiles,
+  parseRetireOutcome,
   parseWorktreeList,
   reviewWorktreePr,
   type BranchFacts,
+  type ListedWorktree,
   type MergedPrHead,
 } from "./worktree-utils.mts";
 
@@ -405,6 +408,116 @@ describe("classifyRetirable", () => {
     });
 
     expect(decision.kind).toBe("kept-detached");
+  });
+});
+
+describe("parseRetireOutcome", () => {
+  test("each verdict line maps to its outcome", () => {
+    expect(
+      parseRetireOutcome(
+        "only-finished: retired — branch fix/autoscroll deleted (a PR from it was merged at 1234abc)",
+      ),
+    ).toBe("retired");
+    expect(
+      parseRetireOutcome(
+        "only-finished: kept (finished-but-dirty) — merged, but the tree holds uncommitted changes",
+      ),
+    ).toBe("kept-finished-but-dirty");
+    expect(
+      parseRetireOutcome("only-finished: kept (unfinished) — no merged PR exists"),
+    ).toBe("kept");
+    expect(
+      parseRetireOutcome("only-finished: kept (detached) — detached HEAD"),
+    ).toBe("kept");
+  });
+
+  test("the verdict is found among the package manager's own chatter", () => {
+    // `npm run` prefixes script output with its own banner lines.
+    const output = [
+      "",
+      "> seejs@1.0.0 worktree:teardown",
+      "> node scripts/teardown-worktree.mts --only-finished /x",
+      "",
+      "only-finished: retired — branch fix/x deleted (a PR from it was merged at 1234abc)",
+      "",
+    ].join("\n");
+    expect(parseRetireOutcome(output)).toBe("retired");
+  });
+
+  test("no verdict line at all is 'unrecognized', never a silent keep", () => {
+    // A teardown that crashed before judging must surface as an error —
+    // mapping it to "kept" would hide every future breakage of the contract.
+    expect(parseRetireOutcome("TypeError: boom\n  at judge (...)")).toBe(
+      "unrecognized",
+    );
+    expect(parseRetireOutcome("")).toBe("unrecognized");
+  });
+});
+
+describe("gcCandidates", () => {
+  const task = (path: string, branch: string | null): ListedWorktree => ({
+    path,
+    branch,
+    prunable: false,
+  });
+
+  test("nominates the closed-but-present worktree and spares the open one", () => {
+    const candidates = gcCandidates({
+      worktrees: [task("/u/repo-wt-9", "fix/nine"), task("/u/repo-wt-44", "feat/redesign")],
+      openDirectories: ["/u/repo", "/u/repo-wt-44"],
+    });
+    expect(candidates.map((worktree) => worktree.path)).toEqual(["/u/repo-wt-9"]);
+  });
+
+  test("a workspace cwd'd in a SUBDIRECTORY still guards its worktree", () => {
+    expect(
+      gcCandidates({
+        worktrees: [task("/u/repo-wt-9", "fix/nine")],
+        openDirectories: ["/u/repo-wt-9/src/deep"],
+      }),
+    ).toEqual([]);
+  });
+
+  test("no workspace list means NO candidates — fail closed, not wide open", () => {
+    // The degenerate implementation treats "could not ask cmux" as "nothing
+    // is open" and nominates every worktree on the machine.
+    expect(
+      gcCandidates({
+        worktrees: [task("/u/repo-wt-9", "fix/nine")],
+        openDirectories: null,
+      }),
+    ).toEqual([]);
+    // An EMPTY list is the opposite answer: asked, none open.
+    expect(
+      gcCandidates({
+        worktrees: [task("/u/repo-wt-9", "fix/nine")],
+        openDirectories: [],
+      }),
+    ).toHaveLength(1);
+  });
+
+  test("skips detached and prunable entries", () => {
+    // Detached is the reviewer's checkout; prunable has no directory to judge.
+    expect(
+      gcCandidates({
+        worktrees: [
+          task("/u/repo-wt-review", null),
+          { path: "/u/repo-wt-gone", branch: "fix/gone", prunable: true },
+        ],
+        openDirectories: [],
+      }),
+    ).toEqual([]);
+  });
+
+  test("a worktree whose name PREFIXES an open cwd is still nominated", () => {
+    // isInside, not startsWith: an open workspace on /u/repo-wt-99 must not
+    // shield /u/repo-wt-9.
+    expect(
+      gcCandidates({
+        worktrees: [task("/u/repo-wt-9", "fix/nine")],
+        openDirectories: ["/u/repo-wt-99"],
+      }),
+    ).toHaveLength(1);
   });
 });
 

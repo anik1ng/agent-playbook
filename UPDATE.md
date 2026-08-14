@@ -87,8 +87,10 @@ difference is drift to sync — EXCEPT these declared local parts, which always 
 - `worktree-utils.mts` — the `ALLOWED_ENV_VARS` list; plus any per-worktree service
   provisioning this repo added to setup/teardown.
 - The worktree module's `package.json` wiring travels WITH its files: a sync that brings
-  a new `scripts/*.mts` whose ADOPT.md snippet names a script for it (e.g. `task:reaper`
-  → `reaper.mts`) adds that line to `package.json` in the same PR — a script file no
+  a new `scripts/*.mts` whose ADOPT.md snippet names a script for it (e.g. `worktree:gc`
+  → `gc-worktrees.mts`) adds that line to `package.json` in the same PR — and a sync that
+  REMOVES a module file (`reaper.mts` and its `task:reaper` entry retired 2026-08-14,
+  replaced by `worktree:gc`) removes its script line the same way. A script file no
   command can reach is the module arriving disabled, the exact failure the Class B
   corollary above names.
 - `ci-docs.yml` — its job `name:` and `paths:` mirror THIS repo's `ci.yml`. Where they
