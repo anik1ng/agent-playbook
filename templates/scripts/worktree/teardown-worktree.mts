@@ -42,6 +42,7 @@ import {
   classifyRetirable,
   classifyReviewWorktree,
   computeOrphans,
+  dropLeadingSeparators,
   isInside,
   packageManagerFromLockfiles,
   parseWorktreeList,
@@ -79,6 +80,10 @@ function resolvePath(target: string): string {
 let parsed;
 try {
   parsed = parseArgs({
+    // Not the parseArgs default (raw process.argv): pnpm forwards the `--`
+    // separator into the script, and parseArgs reads it as a positional that
+    // demotes every flag after it — see dropLeadingSeparators.
+    args: dropLeadingSeparators(process.argv.slice(2)),
     options: {
       sweep: { type: "boolean" },
       disposable: { type: "boolean" },

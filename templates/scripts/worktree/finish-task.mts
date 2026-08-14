@@ -55,6 +55,7 @@ import {
   type ListedWorkspace,
 } from "./task-utils.mts";
 import {
+  dropLeadingSeparators,
   isInside,
   packageManagerFromLockfiles,
   parseWorktreeList,
@@ -67,7 +68,9 @@ const USAGE = [
   "                           retires it, closes this very workspace",
 ].join("\n");
 
-const args = process.argv.slice(2);
+// dropLeadingSeparators, not raw argv: pnpm forwards the `--` separator into
+// the script, and a literal "--" in the positionals breaks the name check.
+const args = dropLeadingSeparators(process.argv.slice(2));
 const here = args.includes("--here");
 // Internal: set by the detached re-exec below, never typed by a human. It
 // switches the audience — outcomes go to `cmux notify`, because stdout is a

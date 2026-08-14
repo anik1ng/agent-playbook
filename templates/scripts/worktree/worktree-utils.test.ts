@@ -7,6 +7,7 @@ import {
   classifyRetirable,
   classifyReviewWorktree,
   computeOrphans,
+  dropLeadingSeparators,
   envKeys,
   filterEnv,
   gcCandidates,
@@ -56,6 +57,34 @@ describe("packageManagerFromLockfiles", () => {
     expect(
       packageManagerFromLockfiles(["pnpm-lock.yaml.bak", "my-yarn.lock"]),
     ).toBe("npm");
+  });
+});
+
+describe("dropLeadingSeparators", () => {
+  test("drops the `--` pnpm forwards, so flags stay flags", () => {
+    // The shipped bug: pnpm passes `run script -- --disposable /p` through
+    // as ["--", "--disposable", "/p"], and parseArgs demotes everything
+    // after a positional `--` to positionals — task:finish exited 1 on its
+    // own documented command line.
+    expect(dropLeadingSeparators(["--", "--disposable", "/p"])).toEqual([
+      "--disposable",
+      "/p",
+    ]);
+  });
+
+  test("is a no-op for npm, which strips the separator itself", () => {
+    expect(dropLeadingSeparators(["--disposable", "/p"])).toEqual([
+      "--disposable",
+      "/p",
+    ]);
+    expect(dropLeadingSeparators([])).toEqual([]);
+  });
+
+  test("drops only LEADING separators — an inner `--` keeps its meaning", () => {
+    // Doubled forwarding (`pnpm run x -- -- 9`) still resolves, but a `--`
+    // after real arguments is not this bug and must reach the parser.
+    expect(dropLeadingSeparators(["--", "--", "9"])).toEqual(["9"]);
+    expect(dropLeadingSeparators(["a", "--", "b"])).toEqual(["a", "--", "b"]);
   });
 });
 

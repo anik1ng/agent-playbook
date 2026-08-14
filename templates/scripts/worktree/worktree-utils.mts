@@ -48,6 +48,31 @@ export function packageManagerFromLockfiles(
   return "npm";
 }
 
+/**
+ * `argv` with every LEADING `--` separator dropped — what a script should
+ * hand its argument parser instead of raw `process.argv.slice(2)`.
+ *
+ * Package managers disagree about the separator: `npm run x -- --flag`
+ * strips the `--` before the script sees it, while pnpm forwards it
+ * literally [verified-by-execution, 2026-08-14: pnpm 10.33 and 11.17
+ * forward, npm 10.9 strips]. `parseArgs` — and any hand-rolled parser —
+ * reads that forwarded `--` as a positional and every flag after it as one
+ * too, which broke every shipping caller of `worktree:teardown` under pnpm
+ * (`task:finish` exited 1 on its documented daily command). The callers
+ * cannot drop the `--`: npm NEEDS it to forward flags at all, and the
+ * module is package-manager agnostic by design (see
+ * `packageManagerFromLockfiles`), so the one place that is right for every
+ * manager is here, on the way into the parser.
+ *
+ * Only LEADING separators are dropped: a `--` deeper in the line is not
+ * this bug, and keeps whatever meaning the parser gives it.
+ */
+export function dropLeadingSeparators(argv: readonly string[]): string[] {
+  let start = 0;
+  while (argv[start] === "--") start += 1;
+  return argv.slice(start);
+}
+
 /** `KEY=value`, optionally `export`-prefixed. Comments and blanks miss. */
 const ASSIGNMENT = /^\s*(?:export\s+)?([A-Za-z_][A-Za-z0-9_]*)\s*=/;
 

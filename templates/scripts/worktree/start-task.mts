@@ -35,6 +35,7 @@ import {
   type ListedWorkspace,
 } from "./task-utils.mts";
 import {
+  dropLeadingSeparators,
   packageManagerFromLockfiles,
   parseWorktreeList,
 } from "./worktree-utils.mts";
@@ -71,7 +72,9 @@ function cmux(args: string[]): string | null {
   }
 }
 
-const [name, branch, ...rest] = process.argv.slice(2);
+// dropLeadingSeparators, not raw argv: pnpm forwards the `--` separator into
+// the script, where it would land as the task NAME.
+const [name, branch, ...rest] = dropLeadingSeparators(process.argv.slice(2));
 if (name === undefined || branch === undefined || rest.length > 0) {
   fail(`exactly two arguments are required.\n\n${USAGE}`);
 }
