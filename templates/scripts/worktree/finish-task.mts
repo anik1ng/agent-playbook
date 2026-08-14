@@ -158,7 +158,15 @@ if (here) {
   // [read-in-source, cmux CLI, 2026-08-14], and with them cleared the
   // caller-workspace guard below correctly sees nobody instead of the
   // workspace being closed.
-  const env: Record<string, string | undefined> = {
+  //
+  // Typed NodeJS.ProcessEnv, never Record<string, string | undefined>:
+  // frameworks augment ProcessEnv with REQUIRED properties (Next.js makes
+  // NODE_ENV required), a plain record misses them, every spawn overload
+  // fails and `child` collapses to `never`. Spreading process.env carries
+  // the required keys along, and ProcessEnv's index signature keeps the
+  // deletes below legal in a bare-Node repo too. [verified-by-execution,
+  // tsc 6.0.3 with and without next@16.2.12's types, 2026-08-14]
+  const env: NodeJS.ProcessEnv = {
     ...process.env,
     CMUX_QUIET: "1",
   };
