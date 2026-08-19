@@ -37,8 +37,12 @@
 #
 # The human watches the PR page, not this terminal: an `auto-review` commit
 # status tracks the run — pending at launch, green when the verdict comment
-# lands (a poller watches for it, since an interactive session outlives its
-# review), red when the session ends without one. The verdict is ALWAYS the
+# lands, red when the review ends without one. A DETACHED watcher owns that
+# status (see POLL below): an interactive session outlives its own review, and
+# it can end in two ways nothing inside it is able to report — sitting on an
+# unanswered prompt, and being killed together with its workspace. Past an
+# hour the status starts saying how long it has been waiting instead of going
+# quiet; past twelve it calls the review abandoned. The verdict is ALWAYS the
 # comment — a green status is not an approval.
 #
 # When the verdict lands, THIS script announces it — a desktop notification,
@@ -67,7 +71,16 @@ LOG="$GIT_COMMON/auto-review-$PR.log"
 
 # Visibility is best-effort by design: if gh or the network is down, the
 # review still runs and the log still fills — only the PR-page signal is lost.
-HEAD_SHA=$(gh pr view "$PR" --json headRefOid --jq .headRefOid 2>/dev/null)
+#
+# The poll mode below INHERITS its head instead of reading it: it watches the
+# head that was actually reviewed, and the PR's head may have moved on since
+# (a fix push during a long review). Re-reading here would point the watcher's
+# status at a commit its reviewer never saw.
+if [ -n "$AUTO_REVIEW_POLL_HEAD" ]; then
+  HEAD_SHA="$AUTO_REVIEW_POLL_HEAD"
+else
+  HEAD_SHA=$(gh pr view "$PR" --json headRefOid --jq .headRefOid 2>/dev/null)
+fi
 
 set_status() { # $1 = pending|success|failure, $2 = description
   [ -n "$HEAD_SHA" ] || return 0
@@ -248,6 +261,16 @@ author_workspace_ref() {
   fi
 }
 
+# Has a verdict naming this head been posted? Defined up here because it is
+# the one question all three status writers ask — the watcher, the exit path,
+# and the watcher's own retirement check.
+verdict_posted() {
+  [ -n "$HEAD_SHA" ] || return 1
+  SHORT=$(printf '%.7s' "$HEAD_SHA")
+  gh pr view "$PR" --json comments --jq '.comments[].body' 2>/dev/null \
+    | grep -q "head $SHORT"
+}
+
 # Tell the human, once per head: a desktop notification with the verdict, and
 # — approve only — the PR page as a background tab in the reviewer's own
 # workspace (a blocker is the author's work, not something to park in a tab).
@@ -317,6 +340,101 @@ elif [ -f "$MAIN/yarn.lock" ]; then PKG=yarn; INSTALL="yarn install --immutable"
 elif [ -f "$MAIN/bun.lock" ] || [ -f "$MAIN/bun.lockb" ]; then PKG=bun; INSTALL="bun install --frozen-lockfile"
 elif [ -f "$MAIN/package-lock.json" ]; then PKG=npm; INSTALL="npm ci"
 else PKG=npm; INSTALL="npm install"
+fi
+
+# ===========================================================================
+# POLL: own the `auto-review` status on behalf of a review that is running.
+#
+# A separate process, and a DETACHED one, because both ways a review can end
+# without a verdict are invisible from inside it:
+#
+#   - the reviewer SITS THERE. An interactive CLI is interactive by design; a
+#     session parked on an unanswered permission prompt is indistinguishable,
+#     from the outside, from one reading a large diff. The inner half is
+#     blocked on the CLI for as long as that lasts and cannot say a word.
+#   - the WORKSPACE IS CLOSED. cmux kills the whole process tree without
+#     running traps (probed 2026-08-19: a TERM handler in the workspace's
+#     command never fires, and a plain `&` background child dies with it), so
+#     nothing inside that tree gets a last word either. The queue above
+#     already depends on this — it is why a lock can outlive its holder.
+#
+# Both used to end the same way: `pending`, forever. nsarchive#134 sat there
+# for seventeen hours, which turns the one status a human reads as "still
+# working, wait" into "at some point in the last N hours this may have stopped
+# mattering". So the watcher lives OUTSIDE the tree it watches — setsid, hence
+# perl, because macOS ships no setsid(1) — and outlives everything in it.
+#
+# It never releases the review's lock, which is why this block sits ABOVE the
+# halves: a poll run is a fresh process that exits here, long before the inner
+# half is anywhere near setting that trap.
+# ===========================================================================
+
+if [ -n "$AUTO_REVIEW_POLL" ]; then
+  REVIEWER_PID="$AUTO_REVIEW_POLL"
+  SHORT=$(printf '%.7s' "$HEAD_SHA")
+  echo "watcher $$ following reviewer $REVIEWER_PID (head $SHORT)" >>"$LOG"
+
+  waited=0
+  interval=60
+  restated=0
+  while :; do
+    sleep "$interval"
+    waited=$((waited + interval))
+
+    # Retired? The pidfile names the review this watcher belongs to: a newer
+    # review of the same PR overwrites it, and the supersede path removes it
+    # before closing the old workspace. Either way this watcher now follows a
+    # review nobody wants a status for, and must write NOTHING — the review
+    # that replaced it has already set its own. Checked before the verdict on
+    # purpose: a stale success is as wrong as a stale failure.
+    [ "$(cat "$PIDFILE" 2>/dev/null)" = "$REVIEWER_PID" ] || {
+      echo "watcher $$ retired — the review of #$PR is no longer $REVIEWER_PID's" >>"$LOG"
+      exit 0
+    }
+
+    # The verdict before the session, always: one that posts and immediately
+    # dies still delivered, and this order is what keeps that green.
+    if verdict_posted; then
+      set_status success "verdict posted for $SHORT — read it before merging"
+      announce_verdict
+      exit 0
+    fi
+
+    if ! kill -0 "$REVIEWER_PID" 2>/dev/null; then
+      echo "watcher $$: reviewer $REVIEWER_PID is gone, no verdict for $SHORT" >>"$LOG"
+      set_status failure "reviewer session ended without a verdict for $SHORT — run /review $PR yourself"
+      exit 0
+    fi
+
+    # Half a day without a verdict is not a slow review, it is an abandoned
+    # one. A watcher that outlives its workspace also has to stop by itself:
+    # `kill -0` against a recycled pid answers "alive" forever.
+    if [ "$waited" -ge 43200 ]; then
+      echo "watcher $$: giving up on $SHORT after 12h" >>"$LOG"
+      set_status failure "no verdict for $SHORT after 12h — the review was abandoned; run /review $PR yourself"
+      exit 0
+    fi
+
+    # Past the first hour, say the age out loud rather than leaving `pending`
+    # to be read as "nearly done". Still PENDING, because it still might be:
+    # from out here, thinking and waiting-on-a-prompt look identical, and the
+    # description says exactly that instead of guessing — calling it red would
+    # send the human to run a second review against a lock the first one holds.
+    # Restated on a cadence that always changes the text, for the same reason
+    # the queue announces once per holder: a status write that says nothing new
+    # is API traffic. The poll slows to match — a verdict that has not appeared
+    # in an hour will not appear in the next sixty seconds.
+    [ "$waited" -ge 3600 ] || continue
+    interval=300
+    if [ "$waited" -lt 10800 ]; then age="$((waited / 60)) min"; step=1800
+    else age="$((waited / 3600))h"; step=3600
+    fi
+    if [ "$((waited - restated))" -ge "$step" ]; then
+      restated=$waited
+      echo "watcher $$: no verdict for $SHORT after $age" >>"$LOG"
+      set_status pending "no verdict after $age — the reviewer may be waiting on a prompt; check the “${WORKSPACE}” workspace"
+    fi
+  done
 fi
 
 # ===========================================================================
@@ -414,9 +532,16 @@ if [ -z "$AUTO_REVIEW_DETACHED" ]; then
   # tree, which is what retires that reviewer (and releases the lock: the
   # wait loop below steals a lock whose holder is gone). Only ever this PR's
   # workspace — another PR's review is a verdict somebody still wants.
+  #
+  # The pidfile goes FIRST, and that ordering is the whole point: the old
+  # review's status watcher is detached, so closing the workspace no longer
+  # kills it, and a watcher that saw its reviewer die would file "session
+  # ended without a verdict" over the status this launch is about to set.
+  # Removing the pidfile is how it is told the review it follows is retired.
   OLD_WS=$(workspace_ref "$WORKSPACE")
   if [ -n "$OLD_WS" ]; then
     echo "superseding the running review ($OLD_WS)" >>"$LOG"
+    rm -f "$PIDFILE"
     cmux_log workspace close "$OLD_WS" || true
   fi
 
@@ -588,44 +713,58 @@ fi
 REVIEW_PROMPT="You are the independent reviewer for pull request #$PR of the repository at $PWD — that exact directory, already checked out at the PR head. Every file you need is inside it: never read, list, search or WRITE anywhere outside $PWD — your file grants end at that directory, and one touch outside it (a diff saved to /tmp, a note in \$HOME) stalls the review on a permission prompt. Scratch files — saved diffs, notes, probe output — go under $PWD/tmp/. Read $PWD/.agents/skills/review/SKILL.md and follow it exactly. You are the reviewer, not the author: never push, never merge, never close. The deliverable is the verdict COMMENT on the PR — a verdict that stays in this transcript did not happen."
 export REVIEW_PROMPT
 
-# Has a verdict naming this head been posted?
-verdict_posted() {
-  [ -n "$HEAD_SHA" ] || return 1
-  SHORT=$(printf '%.7s' "$HEAD_SHA")
-  gh pr view "$PR" --json comments --jq '.comments[].body' 2>/dev/null \
-    | grep -q "head $SHORT"
-}
-
-# An interactive session outlives the review itself (the terminal stays
-# open), so the status cannot wait for the process to exit: this poller
-# flips it green the moment the verdict comment appears.
-(
-  # This subshell must never release the review's lock: it exits as soon as
-  # the verdict lands, while the reviewer's terminal is still open.
-  trap - EXIT INT TERM
-  waited=0
-  while [ "$waited" -lt 3600 ]; do
-    sleep 60
-    waited=$((waited + 60))
-    if verdict_posted; then
-      set_status success "verdict posted for $(printf '%.7s' "$HEAD_SHA") — read it before merging"
-      announce_verdict
-      exit 0
-    fi
-  done
-) &
-POLLER=$!
-
 # This shell's pid, not the CLI's: an interactive CLI holds the terminal in
 # the foreground, so it has no pid of its own to record here. Closing the
 # workspace is what stops a review (it kills the whole tree); the pidfile is
 # the fallback for a workspace that is no longer reachable.
+#
+# Written BEFORE the watcher starts, not after: the pidfile is also how the
+# watcher tells its own review from the one that superseded it, and a watcher
+# whose first tick finds no pidfile would retire itself immediately.
 echo "$$" >"$PIDFILE"
+
+# The status watcher — see POLL above for what it is for and why it is a
+# process rather than the background subshell this used to be.
+#
+# perl is here for exactly one call, setsid(2): macOS ships no setsid(1), and
+# perl is the one interpreter it and every Linux already have. A setsid that
+# fails (the child is already a process-group leader) is not fatal — exec runs
+# regardless and the watcher simply stays in the tree, which is where it lived
+# before. Without perl at all the watcher still runs, still ends the "reviewer
+# sits on a prompt" silence, and only loses the case where the workspace is
+# closed under it; say which of the two is running, because the difference is
+# invisible until the day it matters.
+if command -v perl >/dev/null 2>&1; then
+  AUTO_REVIEW_POLL="$$" AUTO_REVIEW_POLL_HEAD="$HEAD_SHA" \
+    perl -e 'use POSIX qw(setsid); setsid(); exec @ARGV or die "exec: $!"' -- \
+      /bin/sh "$0" "$PR" >>"$LOG" 2>&1 </dev/null &
+  POLLER=$!
+  POLLER_DETACHED=1
+else
+  echo "no perl: the status watcher runs in this tree and dies with the workspace" >>"$LOG"
+  AUTO_REVIEW_POLL="$$" AUTO_REVIEW_POLL_HEAD="$HEAD_SHA" \
+    /bin/sh "$0" "$PR" >>"$LOG" 2>&1 </dev/null &
+  POLLER=$!
+  POLLER_DETACHED=
+fi
 
 {{REVIEW_CMD}}
 STATUS=$?
 
-kill "$POLLER" 2>/dev/null
+# Retire the watcher and WAIT for it to be gone before reading the verdict
+# below. It may be mid-`gh api` with a "no verdict after 2h" restatement, and
+# a write that lands after this one leaves a finished review sitting at
+# pending — precisely the bug the watcher exists to prevent. The whole session
+# and not just its shell, because that in-flight `gh` is a child of it; the
+# detached watcher is a session leader, so the negative pid is its own group
+# and nothing else's. The in-tree fallback shares THIS shell's group, so it
+# gets a plain kill — a group signal there would take the reviewer with it.
+if [ -n "$POLLER_DETACHED" ]; then
+  kill -TERM "-$POLLER" 2>/dev/null
+else
+  kill -TERM "$POLLER" 2>/dev/null
+fi
+wait "$POLLER" 2>/dev/null
 
 echo "=== auto-review PR #$PR exited $STATUS ===" >>"$LOG"
 

@@ -187,7 +187,11 @@ because neither half can do the other's job:
   Nothing announces a review that started, queued or asked — the only signal before the
   verdict is that status. The launcher reports its lifecycle as an **`auto-review` status** in the PR's
   checks list: pending = reviewer running right now, green = verdict comment posted,
-  red = reviewer died without posting (the log below says why). A green `auto-review` is
+  red = the review ended without one (the log below says why). Past an hour with no
+  verdict, pending starts naming the age — "no verdict after 90 min — the reviewer may be
+  waiting on a prompt" — because from outside, a session sitting on an unanswered question
+  is indistinguishable from one reading a large diff, and a bare `pending` gets read as
+  "nearly done". Past twelve hours it goes red as abandoned. A green `auto-review` is
   NOT an approval — it only means the verdict landed; the verdict itself can be a blocker.
   Run `/review <n>` by hand when the auto-run never landed a comment, or when you want a
   second opinion from a different tool.
@@ -219,4 +223,4 @@ because neither half can do the other's job:
 | CI red on `gitleaks`           | Treat as a real leak until proven otherwise; if real: rotate the credential FIRST     |
 | CI red on the build step       | The author fixes it, never you — it fails before the test step, so it fails cheap     |
 | PR hygiene red                 | The body is missing its issue link or its `## Docs` answer — the author writes both   |
-| No verdict comment after `/ship` | The PR's `auto-review` status says which case: pending = still running; red = died without posting; missing = never launched. Detail: `.git/auto-review-<pr>.log` in the author's working copy |
+| No verdict comment after `/ship` | The PR's `auto-review` status says which case: pending = still running, and past an hour it names the age and points at the reviewer's workspace to check for an unanswered prompt; red = ended without posting; missing = never launched. Detail: `.git/auto-review-<pr>.log` in the author's working copy |

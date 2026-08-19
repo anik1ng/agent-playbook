@@ -309,8 +309,10 @@ silent counts as absent. What cmux changes when present:
   Say this out loud in the summary, because the consequence is easy to read as a broken
   integration: **a running review is silent until its verdict lands.** Nothing announces
   that a session started, is queued, or is waiting on a question — the `auto-review`
-  status on the PR is where a stalled review shows up, and the first review's
-  folder-trust prompt is answered on the reviewer's own terminal.
+  status on the PR is where a stalled review shows up, and past an hour it says so in
+  words ("no verdict after 90 min — the reviewer may be waiting on a prompt") rather than
+  sitting at a bare `pending`. The first review's folder-trust prompt is still answered on
+  the reviewer's own terminal.
 
 ## The worktree module (optional — ask)
 
