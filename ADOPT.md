@@ -364,9 +364,24 @@ way, and `git worktree prune` after.
 Then ask which `.env` variables the local gate actually reads — the answer fills
 `ALLOWED_ENV_VARS` in `scripts/worktree-utils.mts`. It ships EMPTY; every key added is a
 declaration that every worktree, a reviewer's included, may see that value. Never offer
-secrets; "none" is a common and correct answer. The module's three test files run under
+secrets; "none" is a common and correct answer. Ask in the same breath: **does any
+variable have to be PRESENT but not REAL?** A module that throws at import time when its
+secret is missing fails the gate in files that only import it, far from the cause — one
+adopted repo lost 11 test files to exactly that. The answer for such a key is a
+throwaway value generated into the worktree's env file, never the real one on the
+allowlist. The module's three test files run under
 vitest/jest where the repo has one; where it has neither, install them anyway and say the
 safety net is dormant until a runner exists.
+
+The vendored `scripts/` files — this module and schema-lock alike — are written to
+compile under the strictest common TypeScript (`strict` plus
+`noUncheckedIndexedAccess`); a repo where they fail to type-check is a playbook bug to
+report upstream, never a reason to patch the copy. A repo's STYLISTIC lint rules
+(typescript-eslint's `stylisticTypeChecked` and kin: `consistent-type-definitions`,
+`prefer-nullish-coalescing`, …) are a different matter: scope them OFF for the vendored
+files, per file and never `scripts/**`, exactly as `.oxfmtrc.json` already scopes the
+formatter. Editing the files to a repo's taste is drift that every sync re-reports
+forever.
 
 ## The schema-lock check (optional — ask only where it applies)
 

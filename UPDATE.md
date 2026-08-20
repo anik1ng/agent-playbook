@@ -148,6 +148,18 @@ is written; edits happen only on a yes:
   cleared, say so and offer ADOPT.md's assessment. A deferral nobody ever re-checks is
   indistinguishable from a repo left behind, and this is the only step that looks.
 
+**Then look INSIDE the reviewer worktree's env file, every sync** — on disk
+(`../<repo>-wt-review/.env*`), never only in git. `auto-review.sh` runs
+`worktree:setup` only when `node_modules` is missing, so a reviewer worktree
+provisioned under an older scheme keeps its old env file indefinitely — one adopted
+repo's reviewer carried a full copy of the maintainer's credentials across every
+review, and nothing else looks. The file may hold nothing beyond what today's
+`worktree:setup` writes (the derived values plus `ALLOWED_ENV_VARS` keys); anything
+more is a finding: report it verbatim by KEY NAME (never the values), and with the
+human's yes delete the file and re-run `worktree:setup` in that worktree so it is
+rewritten minimal. Where no reviewer worktree exists, or the worktree module is not
+installed, one line says so.
+
 ## Verification discipline (binds every claim in the report)
 
 The failure this section exists for was real: a sync declared `docs/RUNBOOK.md` correct
@@ -173,8 +185,9 @@ remembered, not read. The rules:
 - **The report is a fixed form.** Every section appears in every report, in order, even
   when its content is "nothing found": (1) per-file Class A verdicts, (2) the
   `REVIEW_CMD` shape check, (3) the Class B fact matrix, (4) static-gate gaps, (5)
-  deferral re-checks, (6) the sweep date, (7) symlinks and `{{...}}` tokens, (8) local
-  fixes to propose upstream. An absent section is indistinguishable from an unchecked
+  deferral re-checks, (6) the sweep date, (7) symlinks and `{{...}}` tokens, (8) the
+  reviewer worktree env check, (9) local fixes to propose upstream. An absent section is
+  indistinguishable from an unchecked
   one — which is exactly what it usually is.
 - **Last, re-read your own report as its adversary**: every verdict missing its
   evidence is a hole to go fill before showing the human anything, not a sentence to
