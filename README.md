@@ -50,6 +50,7 @@ docs/RUNBOOK.md                    the human's page: what YOU run and remember (
 .agents/skills/{do,ship,review}/   the protocols; .claude/skills/* symlink to them
 .agents/auto-review.sh             optional: /ship starts the cross-family reviewer itself
 scripts/*.mts                      optional worktree module: task:start / task:finish / worktree:gc
+scripts/schema-lock*.mts           optional: one-schema-branch-at-a-time, enforced not remembered
 ```
 
 **`/do <n>` is the one command to remember.** It reads the issue and decides what it

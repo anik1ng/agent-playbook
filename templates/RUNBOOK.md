@@ -107,6 +107,11 @@ in this page — file it.
 
 - One shared dev DB; the one-schema-branch-at-a-time rule and who may apply it live in
   `AGENTS.md` — that section is the law, this is the recap.
+- <!-- Customize: keep this line only where ADOPT.md's schema-lock check is installed. -->
+  A red `check:schema-lock` means another in-flight branch holds the schema. Your
+  override: `ALLOW_SCHEMA_CONFLICT=1 {{PKG_MANAGER}} run check:schema-lock` — whoever
+  lands second owns reconciling the schema by hand, forward only. Agents never use it;
+  they ask you who goes first.
 - Rebuild the dev DB from schema when it's wedged: _(add the command)_ — destructive to dev
   data, which is disposable by design.
 - After a schema PR merges: rebuild the dev DB from the default branch before the next schema

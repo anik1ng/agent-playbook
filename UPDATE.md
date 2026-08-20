@@ -47,7 +47,9 @@ adopted repo — that is a playbook bug, not a repo's configuration task.
 **Class A — kept identical to the playbook**: everything else adoption installed — the
 three skills, `pr-hygiene.yml`, `security.yml`, `ci-docs.yml`, the PR template,
 `dependabot.yml`, `.githooks/pre-push`, `.claude/settings.json`, `.agents/auto-review.sh`,
-and the worktree module (`scripts/*.mts` + their tests). Compare byte-for-byte; a
+the worktree module (`scripts/*.mts` + their tests) and the schema-lock module
+(`scripts/schema-lock.mts`, `scripts/check-schema-lock.mts`, `scripts/schema-lock.test.ts`
+— its config file is wholly local, below). Compare byte-for-byte; a
 difference is drift to sync — EXCEPT these declared local parts, which always survive:
 
 - `auto-review.sh` — the rendered `REVIEW_CMD` line (this repo's reviewer command). The
@@ -86,7 +88,12 @@ difference is drift to sync — EXCEPT these declared local parts, which always 
   design working.
 - `worktree-utils.mts` — the `ALLOWED_ENV_VARS` list; plus any per-worktree service
   provisioning this repo added to setup/teardown.
-- The worktree module's `package.json` wiring travels WITH its files: a sync that brings
+- `schema-lock.config.mts` — the WHOLE file is the repo's: it declares this repo's
+  schema surface, the module's one per-repo fact. A sync never touches it — but a
+  surviving `{{SCHEMA_SURFACE}}` token in it is a finding for the human: the check has
+  been failing loudly since adoption, or was installed without its surface.
+- The worktree and schema-lock modules' `package.json` wiring travels WITH their files:
+  a sync that brings
   a new `scripts/*.mts` whose ADOPT.md snippet names a script for it (e.g. `worktree:gc`
   → `gc-worktrees.mts`) adds that line to `package.json` in the same PR — and a sync that
   REMOVES a module file (`reaper.mts` and its `task:reaper` entry retired 2026-08-14,

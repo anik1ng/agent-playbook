@@ -40,6 +40,7 @@ blocks a direct push.
 | `skills/{do,ship,review}/`   | `.agents/skills/<name>/SKILL.md`                     |
 | `scripts/auto-review.sh`     | `.agents/auto-review.sh` (755; only with a reviewer) |
 | `scripts/worktree/*` (9)     | `scripts/` (only when the worktree module is wanted) |
+| `scripts/schema-lock/*` (4)  | `scripts/` (only when the schema-lock check is wanted) |
 | `tooling/*` (3)              | repo root (only the ones "The static gate" installs)  |
 
 Plus three RELATIVE symlinks: `.claude/skills/<name>` → `../../.agents/skills/<name>`.
@@ -54,9 +55,10 @@ another tool's wrapper file, e.g. `GEMINI.md`).
 **Placeholders.** Only three files are rendered — `AGENTS.md`, `docs/RUNBOOK.md` and
 `ci.yml` carry `{{DEFAULT_BRANCH}}` / `{{PKG_MANAGER}}` / `{{INSTALL_CMD}}` /
 `{{TEST_CMD}}` plus ci.yml's two whole-line block placeholders — and `auto-review.sh`
-carries `{{REVIEW_CMD}}`. Everything else (the hook, the worktree scripts) detects its
-facts at runtime and is installed byte-for-byte. No `{{...}}` token may survive in
-anything you write.
+carries `{{REVIEW_CMD}}`. Where the schema-lock check is installed, its config carries
+`{{SCHEMA_SURFACE}}` (see that step). Everything else (the hook, the worktree scripts)
+detects its facts at runtime and is installed byte-for-byte. No `{{...}}` token may
+survive in anything you write.
 
 ## Detect and render
 
@@ -366,6 +368,51 @@ secrets; "none" is a common and correct answer. The module's three test files ru
 vitest/jest where the repo has one; where it has neither, install them anyway and say the
 safety net is dormant until a runner exists.
 
+## The schema-lock check (optional — ask only where it applies)
+
+Offer this ONLY where AGENTS.md's "Shared mutable state" section survives adoption — a
+repo with no shared database or other single-writer resource has nothing for it to
+guard, and a check that can never fire is dead weight. It installs independently of the
+worktree module, deliberately: two open PRs collide on a schema surface with no worktree
+in sight, and a worktree-using repo without a database never needs it. Where the section
+survives, ask: "Do you want the one-schema-branch-at-a-time rule machine-enforced?"
+What it buys: the rule stops being a habit ("check open PRs yourself") the moment work
+goes parallel — which is exactly when the habit fails. Two branches on the schema
+surface are not a merge conflict: a merge conflict is loud, local and undoable, while
+two migration numbers cut from the same base can only be reconciled by hand, forward.
+
+If yes: install the four files into `scripts/` and wire `package.json` (Rule 0 applies):
+
+    "check:schema-lock": "node scripts/check-schema-lock.mts"
+
+Then, WITH the human, replace the `{{SCHEMA_SURFACE}}` placeholder in
+`scripts/schema-lock.config.mts` — the module's one per-repo fact, a predicate naming
+which paths are the shared schema surface; the file carries a worked example. It ships
+THROWING, so an unfilled config fails the check loudly rather than answering green while
+watching nothing. The config is the repo's own from that moment (UPDATE.md lists it as a
+declared local part); the other three files are Class A. Add those three to
+`.oxfmtrc.json`'s `ignorePatterns` by name — the template already lists them — and leave
+the config OUT: it is repo-owned code the formatter should see. The test file runs under
+vitest/jest where the repo has one; where it has neither, install it anyway and say the
+safety net is dormant until a runner exists.
+
+Wire the prose in the same breath:
+
+- `AGENTS.md` "Shared mutable state" keeps the template's MACHINE-ENFORCED bullet
+  (delete it where the check is declined — a rule that claims a check it does not have
+  is the version every future session will believe).
+- `docs/RUNBOOK.md` "Database" keeps the template's override line
+  (`ALLOW_SCHEMA_CONFLICT=1` — the human's call, like `ALLOW_DIRECT_PUSH`); delete it
+  where the check is declined, for the same reason.
+
+How it decides, so the offer is honest: two sources, both needed — `gh pr list` sees
+branches that reached a PR, `git worktree list` sees the ones that have not (a worktree
+started five minutes ago is exactly the window the check exists for). FAIL-CLOSED: a
+source it cannot query goes red as "did not run", never green as "found nothing". Cheap
+by construction: a branch touching no schema file answers green before consulting
+anything and never invokes `gh` — ~90% of branches, no network dependency added to
+their gate.
+
 ## Arm the hook, offer the settings
 
 - `core.hooksPath` unset and no live hooks in `.git/hooks` →
@@ -441,6 +488,10 @@ summarized to "all good". A SKIP is not a pass.
 7. Worktree module, where installed: the four `package.json` scripts exist, and
    `node scripts/setup-worktree.mts` from the MAIN checkout refuses with exit 1 — a
    refusal that names the right directory proves the script runs, with zero side effects.
+8. Schema-lock check, where installed: the `check:schema-lock` script exists, and running
+   it from a clean default-branch checkout answers green with "changes no schema file" —
+   proving the script runs, with zero side effects and no `gh` needed. (An unfilled
+   `{{SCHEMA_SURFACE}}` is already a FAIL under check 2.)
 
 ## Summarize and offer the first commit
 

@@ -132,6 +132,12 @@ Where all working copies share ONE dev database (or any other single-writer reso
   before the next schema task starts. The same rule prevents two branches numbering the
   same migration from a stale base.
 - The schema-changing branch commits its generated migration in the SAME PR.
+- <!-- Customize: keep this bullet only where ADOPT.md's schema-lock check is installed; delete it otherwise. -->
+  The one-branch rule is MACHINE-ENFORCED — `{{PKG_MANAGER}} run check:schema-lock`,
+  part of the local gate. It is fail-closed: a source it cannot query (no `gh`) goes red
+  as "did not run", never green as "found nothing". The override
+  (`ALLOW_SCHEMA_CONFLICT=1`) is the human's, like `ALLOW_DIRECT_PUSH`; an agent that
+  hits this asks who goes first.
 - Tests use their OWN database, never the dev one, and its name must contain `test` so a
   misconfigured run fails loudly instead of wiping dev data.
 
