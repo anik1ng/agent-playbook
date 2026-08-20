@@ -298,15 +298,16 @@ describe("buildLayout", () => {
     };
 
     expect(layout.children).toHaveLength(2);
-    expect(layout.children[0].pane.surfaces[0]).toEqual({
+    expect(layout.children[0]?.pane.surfaces[0]).toEqual({
       type: "terminal",
       command: "claude",
     });
     // The right pane is the shell you drop into while the agent works. A
     // layout that starts the agent in both panes is two agents in one
-    // worktree, racing on the same files.
-    expect(layout.children[1].pane.surfaces[0].command).toBeUndefined();
-    expect(layout.children[1].pane.surfaces[0].type).toBe("terminal");
+    // worktree, racing on the same files. The `?.` cannot fake this green:
+    // a missing pane fails the `type` assertion below.
+    expect(layout.children[1]?.pane.surfaces[0]?.command).toBeUndefined();
+    expect(layout.children[1]?.pane.surfaces[0]?.type).toBe("terminal");
   });
 
   test("carries the agent command it is given, not a hardcoded one", () => {

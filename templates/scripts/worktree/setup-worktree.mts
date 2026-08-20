@@ -64,7 +64,9 @@ const worktrees = parseWorktreeList(
     encoding: "utf8",
   }),
 );
-const mainCheckout = realpathSync(worktrees[0].path);
+const [firstWorktree] = worktrees;
+if (firstWorktree === undefined) throw new Error("git listed no worktrees");
+const mainCheckout = realpathSync(firstWorktree.path);
 const repoName = path.basename(mainCheckout);
 const pkg = packageManagerFromLockfiles(readdirSync(here));
 

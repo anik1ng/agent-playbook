@@ -95,7 +95,9 @@ const worktrees = parseWorktreeList(
     encoding: "utf8",
   }),
 );
-const mainCheckout = realpathSync(worktrees[0].path);
+const [firstWorktree] = worktrees;
+if (firstWorktree === undefined) throw new Error("git listed no worktrees");
+const mainCheckout = realpathSync(firstWorktree.path);
 const target = worktreePathFor(mainCheckout, name);
 const pkg = packageManagerFromLockfiles(readdirSync(mainCheckout));
 

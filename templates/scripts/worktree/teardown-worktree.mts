@@ -118,8 +118,13 @@ const worktrees = parseWorktreeList(
   }),
 ).map((worktree) => ({ ...worktree, path: resolvePath(worktree.path) }));
 
-// The first entry is always the main checkout.
-const [mainCheckout, ...others] = worktrees;
+// The first entry is always the main checkout. Rebound through a plain const:
+// TypeScript does not carry the narrowing of a destructured binding into
+// functions that close over it, so a bare guard on the destructured name
+// would not satisfy `noUncheckedIndexedAccess` there.
+const [firstWorktree, ...others] = worktrees;
+if (firstWorktree === undefined) throw new Error("git listed no worktrees");
+const mainCheckout = firstWorktree;
 const cwd = resolvePath(process.cwd());
 const pkg = packageManagerFromLockfiles(readdirSync(mainCheckout.path));
 
@@ -399,6 +404,7 @@ if (values.sweep) {
 // ---------------------------------------------------------------------------
 
 const requested = positionals[0];
+if (requested === undefined) fail(`exactly one target is required.\n\n${USAGE}`);
 const wanted = resolvePath(requested);
 const target: ListedWorktree | undefined =
   others.find((worktree) => worktree.path === wanted) ??

@@ -121,8 +121,9 @@ export function findWorkspace(
     .filter((workspace) => workspace.title === name)
     .map((workspace) => workspace.ref);
 
-  if (refs.length === 0) return { kind: "none" };
-  if (refs.length === 1) return { kind: "one", ref: refs[0] };
+  const [ref] = refs;
+  if (ref === undefined) return { kind: "none" };
+  if (refs.length === 1) return { kind: "one", ref };
   return { kind: "ambiguous", refs };
 }
 
@@ -163,8 +164,9 @@ export function resolveTaskWorkspace(
     )
     .map((workspace) => workspace.ref);
 
-  if (refs.length === 0) return { kind: "none" };
-  if (refs.length === 1) return { kind: "one", ref: refs[0] };
+  const [ref] = refs;
+  if (ref === undefined) return { kind: "none" };
+  if (refs.length === 1) return { kind: "one", ref };
   return { kind: "ambiguous", refs };
 }
 

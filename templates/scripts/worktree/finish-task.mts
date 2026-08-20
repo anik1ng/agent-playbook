@@ -92,7 +92,7 @@ function notify(title: string, body: string): void {
 
 function fail(message: string): never {
   console.error(`\n✗ ${message}\n`);
-  if (announce) notify("task:finish failed", message.split("\n")[0]);
+  if (announce) notify("task:finish failed", message.split("\n")[0] ?? message);
   process.exit(1);
 }
 
@@ -113,7 +113,9 @@ const worktrees = parseWorktreeList(
     encoding: "utf8",
   }),
 );
-const mainCheckout = realpathSync(worktrees[0].path);
+const [firstWorktree] = worktrees;
+if (firstWorktree === undefined) throw new Error("git listed no worktrees");
+const mainCheckout = realpathSync(firstWorktree.path);
 const pkg = packageManagerFromLockfiles(readdirSync(mainCheckout));
 
 // ---------------------------------------------------------------------------

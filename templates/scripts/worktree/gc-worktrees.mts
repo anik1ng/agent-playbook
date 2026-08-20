@@ -74,7 +74,12 @@ const worktrees = parseWorktreeList(
     return worktree; // prunable: the directory is gone, gcCandidates skips it
   }
 });
-const [mainCheckout, ...others] = worktrees;
+// Rebound through a plain const: TypeScript does not carry the narrowing of a
+// destructured binding into functions that close over it, so a bare guard on
+// the destructured name would not satisfy `noUncheckedIndexedAccess` there.
+const [firstWorktree, ...others] = worktrees;
+if (firstWorktree === undefined) throw new Error("git listed no worktrees");
+const mainCheckout = firstWorktree;
 const pkg = packageManagerFromLockfiles(readdirSync(mainCheckout.path));
 
 const listed = cmux(["workspace", "list", "--json"]);

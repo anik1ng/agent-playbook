@@ -167,7 +167,7 @@ describe("classifySchemaLock", () => {
     );
 
     expect(verdict.conflicts).toHaveLength(1);
-    expect(verdict.conflicts[0].label).toBe("PR #200");
+    expect(verdict.conflicts[0]?.label).toBe("PR #200");
   });
 
   test("two unnamed holders are never merged into one", () => {
