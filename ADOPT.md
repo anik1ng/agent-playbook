@@ -292,8 +292,10 @@ silent counts as absent. What cmux changes when present:
   outcome, not a bug to fix with a silent background fallback. Reviews share ONE worktree
   and therefore run one at a time; a second PR's workspace opens immediately and waits,
   saying "queued behind #N" in its `auto-review` status.
-- **task workspaces**: the worktree module's `task:start` opens a two-pane workspace
-  (agent + shell) when cmux answers; without it the git half still works.
+- **task workspaces**: the worktree module's `task:start` opens a one-pane workspace
+  running the agent when cmux answers; without it the git half still works. (It used to
+  be an agent + shell split; the shell pane was dismissed by hand on every task, and
+  `cmux new-split right` covers the rare case where one is wanted.)
 - **verdict announcements are built in**: when the verdict comment lands, the launcher
   itself sends the desktop notification; on an approve it opens the PR page as a
   background tab in the reviewer's workspace, and on a blocker it reaches the AUTHOR's

@@ -292,22 +292,18 @@ describe("workspaceRefFromAck", () => {
 });
 
 describe("buildLayout", () => {
-  test("puts the agent in the first pane and leaves the second EMPTY", () => {
+  test("opens ONE pane and runs the agent in it", () => {
     const layout = JSON.parse(buildLayout("claude")) as {
-      children: { pane: { surfaces: { type: string; command?: string }[] } }[];
+      pane?: { surfaces: { type: string; command?: string }[] };
+      children?: unknown[];
     };
 
-    expect(layout.children).toHaveLength(2);
-    expect(layout.children[0]?.pane.surfaces[0]).toEqual({
-      type: "terminal",
-      command: "claude",
-    });
-    // The right pane is the shell you drop into while the agent works. A
-    // layout that starts the agent in both panes is two agents in one
-    // worktree, racing on the same files. The `?.` cannot fake this green:
-    // a missing pane fails the `type` assertion below.
-    expect(layout.children[1]?.pane.surfaces[0]?.command).toBeUndefined();
-    expect(layout.children[1]?.pane.surfaces[0]?.type).toBe("terminal");
+    // The `children` assertion is the one that matters: asserting only "the
+    // agent is somewhere" stays green for the old agent + empty-shell split
+    // coming back. This test replaced the one that pinned that split.
+    expect(layout.children).toBeUndefined();
+    expect(layout.pane?.surfaces).toHaveLength(1);
+    expect(layout.pane?.surfaces[0]).toEqual({ type: "terminal", command: "claude" });
   });
 
   test("carries the agent command it is given, not a hardcoded one", () => {

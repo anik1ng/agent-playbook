@@ -284,7 +284,7 @@ if (listed === null) {
       // that shape reads as normal.
       const ref = workspaceRefFromAck(created) ?? created;
       console.log(
-        `\n• workspace “${name}” created (${ref}) — ${agentCommand} + a shell`,
+        `\n• workspace “${name}” created (${ref}) — ${agentCommand}`,
       );
     }
   }

@@ -16,10 +16,10 @@ import path from "node:path";
 import { isInside } from "./worktree-utils.mts";
 
 /**
- * The agent the left pane starts. Overridable via TASK_AGENT_CMD because
- * this is the one thing in here that is about a vendor rather than about
- * the repo: the reviewer runs a different family on purpose (AGENTS.md →
- * "Model routing").
+ * The agent the workspace's pane starts. Overridable via TASK_AGENT_CMD
+ * because this is the one thing in here that is about a vendor rather than
+ * about the repo: the reviewer runs a different family on purpose (AGENTS.md
+ * → "Model routing").
  */
 export const DEFAULT_AGENT_COMMAND = "claude";
 
@@ -219,21 +219,22 @@ export function workspaceRefFromAck(ack: string | null): string | null {
 }
 
 /**
- * The split the human asked for: an agent on the left, an EMPTY terminal on
- * the right. The right pane carries no `command` on purpose — it is the shell
- * you drop into to run a query or read a log while the agent works.
+ * ONE pane, running the agent. This used to be a horizontal split with an
+ * empty shell on the right — "the shell you drop into while the agent works"
+ * — but in practice that pane got dismissed by hand on every task. Evidence
+ * from the repo that changed it first (mindforms #82) [verified-by-execution,
+ * 2026-08-21]: all four task workspaces open at the time reported exactly ONE
+ * pane via `cmux list-panes`, because the human had closed the second one
+ * each time. A split that is always dismissed costs more than it gives, and
+ * `cmux new-split right` covers the rare case where a shell is wanted.
  *
- * Shape taken from `cmux new-workspace --help` and confirmed by creating one
- * [verified-by-execution, cmux 0.64.22, 2026-08-10]: two panes, both
- * terminals, both inheriting `--cwd`, and the left one having run its command.
+ * Shape confirmed by creating a workspace [verified-by-execution, cmux
+ * 0.64.22, 2026-08-21]: a root that is a single pane object — no direction,
+ * no split, no children — is accepted, the terminal inherits `--cwd`, and
+ * the command runs in it.
  */
 export function buildLayout(agentCommand: string): string {
   return JSON.stringify({
-    direction: "horizontal",
-    split: 0.6,
-    children: [
-      { pane: { surfaces: [{ type: "terminal", command: agentCommand }] } },
-      { pane: { surfaces: [{ type: "terminal" }] } },
-    ],
+    pane: { surfaces: [{ type: "terminal", command: agentCommand }] },
   });
 }
