@@ -224,8 +224,11 @@ here WITH the condition that makes them mandatory. -->
   run `/review <n>` by hand. All reviews share ONE worktree (`<repo>-wt-review`), so they
   run one at a time: a second PR's review waits and reports "queued behind #N". The
   launcher reports its lifecycle as an `auto-review` commit status on the PR head
-  (pending → success/failure); the verdict is still ONLY the comment — a green status is
-  not an approval. The reviewer process stays report-only (`git push`, `gh pr merge`,
+  (pending → success/failure) and mirrors the same states into the cmux sidebar — a pill
+  on the `review #<pr>` workspace, and one on the author's that replaces the agent
+  wrapper's "Needs input" for the duration; two of those states (the reviewer waiting on
+  a prompt, the review ending without a verdict) also notify. The verdict is still ONLY
+  the comment — a green status is not an approval. The reviewer process stays report-only (`git push`, `gh pr merge`,
   `gh pr close` machine-denied — in the CLI's permission config, and again in a
   pre-tool-use hook where it has one) and scoped to that worktree, never launched with a
   blanket permission bypass.

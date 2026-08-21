@@ -44,7 +44,10 @@ in this page — file it.
   the author's task workspace flips to the `needs-attention` sidebar lane, gets a
   checklist item, and its live session receives the fix instruction as a user message.
   Automatic, best-effort, nothing to configure; no cmux → no announcements, everything
-  else unchanged. If you ever wire more notifications, wire them to EVENTS (a verdict landed),
+  else unchanged. Two more events notify, and only these two: **the reviewer is waiting
+  on a prompt** (its terminal has not moved for three minutes) and **the review ended
+  without a verdict**. A review that merely started, queued or took the lock says
+  nothing — it needs nothing from you. If you ever wire more notifications, wire them to EVENTS (a verdict landed),
   never to every tool call: a notify per "ask" against a broad allowlist announces
   prompts that never come — once per command, for the whole review. Per-ask announcements
   pair only with a NARROW allowlist: both or neither.
@@ -190,14 +193,32 @@ because neither half can do the other's job:
   file grants or the launch flags; the reviewer's page (`templates/agy/README.md` for
   agy) says which. Reviews also serialise, since they share that worktree: a second PR's
   workspace opens straight away and waits, with `auto-review` reading "queued behind #N".
-  Nothing announces a review that started, queued or asked — the only signal before the
-  verdict is that status. The launcher reports its lifecycle as an **`auto-review` status** in the PR's
+  The same state machine is mirrored into the **cmux sidebar**, which is the surface
+  you are actually looking at while you work _(delete this paragraph if this machine has
+  no cmux)_. The `review #<pr>` workspace carries a pill for wherever the review has got
+  to — 🕘 `Queued behind #M`, ⚙️ `Preparing…`, 👁 `Reviewing · PR #N`, 🔔 `Waiting for
+  you`, ✅ `Approved`, ⛔️ `Blocker — see the comment`, ❌ `Failed — run /review N` — and
+  the two that need you (`Waiting for you`, `Failed`) also put it in the
+  `needs-attention` lane and fire a notification. **`Waiting for you` is the one to act
+  on**: it means the reviewer's terminal has not changed for three minutes, which from
+  outside is what an unanswered permission prompt looks like. Switch to that workspace and
+  answer it; the pill goes back to `Reviewing` on its own once the screen moves again.
+  An approved review **stays open** behind its green pill — nothing auto-closes it, so
+  the transcript is still there to read, and closing it is your call.
+  Meanwhile your own task workspace stops saying "Needs input" about a minute after
+  `/ship` — the work is done and under review, not waiting on you — and says
+  👁 `In review · PR #N` instead, then ✅ `Approved · PR #N — merge when ready` or
+  ⛔️ `Blocker · PR #N` when the verdict lands. That swap happens once per `/ship`: if you
+  resume the session yourself, its normal "Needs input" comes back and stays.
+  The launcher also reports its lifecycle as an **`auto-review` status** in the PR's
   checks list: pending = reviewer running right now, green = verdict comment posted,
   red = the review ended without one (the log below says why). Past an hour with no
-  verdict, pending starts naming the age — "no verdict after 90 min — the reviewer may be
-  waiting on a prompt" — because from outside, a session sitting on an unanswered question
-  is indistinguishable from one reading a large diff, and a bare `pending` gets read as
-  "nearly done". Past twelve hours it goes red as abandoned. A green `auto-review` is
+  verdict, pending starts naming the age — "no verdict after 90 min — the reviewer's
+  screen is still moving; it is working, not stuck" — because a bare `pending` gets read
+  as "nearly done". It says the opposite ("the reviewer is waiting on you") when the
+  stall watch above has caught it, and falls back to the old "may be waiting on a prompt"
+  hedge only where it could not read the terminal at all. Past twelve hours it goes red
+  as abandoned. A green `auto-review` is
   NOT an approval — it only means the verdict landed; the verdict itself can be a blocker.
   Run `/review <n>` by hand when the auto-run never landed a comment, or when you want a
   second opinion from a different tool.
@@ -229,4 +250,5 @@ because neither half can do the other's job:
 | CI red on `gitleaks`           | Treat as a real leak until proven otherwise; if real: rotate the credential FIRST     |
 | CI red on the build step       | The author fixes it, never you — it fails before the test step, so it fails cheap     |
 | PR hygiene red                 | The body is missing its issue link or its `## Docs` answer — the author writes both   |
-| No verdict comment after `/ship` | The PR's `auto-review` status says which case: pending = still running, and past an hour it names the age and points at the reviewer's workspace to check for an unanswered prompt; red = ended without posting; missing = never launched. Detail: `.git/auto-review-<pr>.log` in the author's working copy |
+| No verdict comment after `/ship` | Look at the `review #<pr>` workspace's pill first — `Waiting for you` means answer the prompt there, `Failed` means run `/review <n>` yourself. The PR's `auto-review` status says the same: pending = still running (past an hour it names the age and whether the terminal is still moving); red = ended without posting; missing = never launched. Detail: `.git/auto-review-<pr>.log` in the author's working copy |
+| A shipped workspace still says "Needs input" | The pill swap needs about a minute, and it happens once per `/ship` — if you typed into that session after shipping, its real "Needs input" is back and correct. A workspace that never swaps means the launcher could not match it to the PR's branch; `.git/auto-review-<pr>.log` says "author workspace: unresolved" |

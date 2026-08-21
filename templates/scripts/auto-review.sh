@@ -216,6 +216,53 @@ caller_group_ref() {
 
 WORKSPACE="review #$PR"
 
+# ---------------------------------------------------------------------------
+# The SIDEBAR twin of set_status.
+#
+# Every state below is already computed for the `auto-review` commit status —
+# and written only to the PR page, which is the one surface the human is not
+# looking at while they work. The sidebar is. So each point that calls
+# set_status calls one of these beside it: same state machine, second writer,
+# no new logic. The PR page stays the record; the sidebar is where it is read.
+#
+# Best-effort like every other cmux call in this file, and routed through
+# cmux_log for the same reason: a failed write may be harmless, it must never
+# be silent.
+# ---------------------------------------------------------------------------
+
+# $1 = workspace ref ('' → nothing to write), $2 = pill text, $3 = SF Symbol
+# name, $4 = #hex, $5 = sidebar lane ('' → leave the lane alone).
+#
+# One key, `review`, for every state this script writes: a single
+# clear-status then undoes whatever it last said, and a later state simply
+# overwrites the earlier one instead of stacking a second pill beside it.
+# Priority 90 puts it above an agent wrapper's own pill without claiming the
+# top of the list.
+set_ws_status() {
+  [ -n "$1" ] || return 0
+  cmux_log set-status review "$2" --icon "$3" --color "$4" --priority 90 \
+    --workspace "$1" || true
+  [ -n "$5" ] || return 0
+  cmux_log workspace status set "$5" --workspace "$1" || true
+}
+
+# The review's OWN workspace. INNER HALF AND ITS WATCHER ONLY — in the outer
+# half the caller is the author's shipping session, and this would happily
+# paint the reviewer's states onto it.
+#
+# The watcher counts as inside: cmux identifies its caller from the
+# environment, and that survives the setsid+exec which detaches it
+# [verified-by-execution, 2026-08-21]. The cwd match is the fallback for a
+# caller cmux cannot place; it is unambiguous because the lock means only one
+# review lives in that worktree at a time.
+review_workspace_ref() {
+  rw_ref=$(caller_workspace_ref)
+  [ -n "$rw_ref" ] || rw_ref=$(workspace_ref_by_dir "$WORKTREE")
+  printf '%s' "$rw_ref"
+}
+
+review_pill() { set_ws_status "$(review_workspace_ref)" "$1" "$2" "$3" "$4"; }
+
 # The author's LIVE task workspace for this PR, or nothing. Resolved at SEND
 # time, never remembered at launch: cmux renumbers workspace refs across app
 # restarts (probed 2026-08-13, cmux 0.64), so a ref recorded when the review
@@ -261,6 +308,41 @@ author_workspace_ref() {
   fi
 }
 
+# $1 = the author's workspace ref, $2 = pill text, $3 = SF Symbol, $4 = #hex.
+#
+# The agent wrapper's own pill is CLEARED, not left to sit beside this one.
+# After /ship, cmux's Claude Code integration writes `claude_code=Needs input`
+# on the turn-end hook and puts the workspace in `needs-attention` — true (the
+# session is idle) and useless (the work is done and under review). Three
+# shipped workspaces then all shout for attention and none of them needs it.
+# With the foreign pill gone, cmux infers the `review` lane from the open PR
+# by itself, so nothing has to set a lane here [verified-by-execution,
+# 2026-08-21].
+author_pill() {
+  : >"$GIT_COMMON/auto-review-$PR.pill"
+  cmux_log clear-status claude_code --workspace "$1" || true
+  set_ws_status "$1" "$2" "$3" "$4" ""
+}
+
+# The first swap of a launch: "Needs input" → "In review · PR #N".
+#
+# Written ONCE and never re-asserted — a human who resumes that session must
+# get their real "Needs input" back the moment the wrapper writes it again.
+# The stamp file is the only channel the queue loop and the detached watcher
+# share, which is why it is a file and not a variable. It is dropped on the
+# first ATTEMPT, resolved or not: retrying every tick would be a gh call and a
+# log line per minute for a workspace that is not there.
+#
+# Callers hold it back for the first minute on purpose. The turn-end hook
+# fires when the /ship session finishes ITS turn, seconds after this script is
+# launched, and a swap written before that is clobbered by it.
+author_pill_swap() {
+  [ -f "$GIT_COMMON/auto-review-$PR.pill" ] && return 0
+  ap_ws=$(author_workspace_ref)
+  [ -n "$ap_ws" ] || { : >"$GIT_COMMON/auto-review-$PR.pill"; return 0; }
+  author_pill "$ap_ws" "In review · PR #$PR" eye "#A855F7"
+}
+
 # Has a verdict naming this head been posted? Defined up here because it is
 # the one question all three status writers ask — the watcher, the exit path,
 # and the watcher's own retirement check.
@@ -269,6 +351,21 @@ verdict_posted() {
   SHORT=$(printf '%.7s' "$HEAD_SHA")
   gh pr view "$PR" --json comments --jq '.comments[].body' 2>/dev/null \
     | grep -q "head $SHORT"
+}
+
+# The review ended without a verdict. Three channels: the PR status (the
+# record), the sidebar (where it is actually seen), and a desktop
+# notification, because the human may be looking at neither.
+#
+# One of exactly TWO events this script notifies for — the other is a stalled
+# reviewer. Nothing announces a review that merely started, queued or took the
+# lock: none of those needs anything from anyone, and a notification that can
+# be ignored safely teaches the human to ignore the ones that cannot.
+review_died() { # $1 = the `auto-review` status description
+  set_status failure "$1"
+  review_pill "Failed — run /review $PR" exclamationmark.triangle.fill "#EF4444" needs-attention
+  CMUX_QUIET=1 cmux notify --title "Review #$PR" \
+    --body "ended without a verdict — run /review $PR yourself" >/dev/null 2>&1 || true
 }
 
 # Tell the human, once per head: a desktop notification with the verdict, and
@@ -293,14 +390,31 @@ announce_verdict() {
     | cut -c1-160)
   CMUX_QUIET=1 cmux notify --title "Review #$PR" \
     --body "${VERDICT:-verdict posted} (head $SHORT)" >/dev/null 2>&1 || true
-  case "$VERDICT" in
+  # Branch on the verdict WORD, never the full line: the line carries a
+  # free-text reason, and a blocker whose reason happens to contain "approve"
+  # must not light the green path. FIRST match, not an anchored one — the
+  # real verdict always precedes the reason on the line (even wrapped in
+  # markdown bold), so anything a reason quotes comes second and loses.
+  KIND=$(printf '%s' "$VERDICT" | grep -oiE 'VERDICT: *[a-z]+' | head -1)
+  case "$KIND" in
     *[Aa]pprove*)
+      # The review workspace STAYS OPEN behind its green pill. Nothing here
+      # closes it: the transcript is the only place the reasoning behind an
+      # approve survives, and closing a workspace is the human's action.
+      review_pill "Approved" checkmark.seal.fill "#22C55E" done
+      APPROVE_WS=$(author_workspace_ref)
+      [ -n "$APPROVE_WS" ] && \
+        author_pill "$APPROVE_WS" "Approved · PR #$PR — merge when ready" checkmark.seal.fill "#22C55E"
       URL=$(gh pr view "$PR" --json url --jq .url 2>/dev/null)
       if [ -n "$URL" ]; then
         CMUX_QUIET=1 cmux browser open "$URL" --focus false >/dev/null 2>&1 || true
       fi
       ;;
     *[Bb]lock*)
+      # The reviewer's own workspace goes to `done`, not `needs-attention`:
+      # the review is over either way, and what is left to do belongs to the
+      # AUTHOR's workspace, which is what the three channels below light up.
+      review_pill "Blocker — see the comment" xmark.octagon.fill "#EF4444" done
       # Three channels, durable ones FIRST — the sidebar lane and the
       # checklist item survive an author session that is closed or restarted;
       # the send only reaches a live one, and starts the fix loop when it
@@ -316,6 +430,7 @@ announce_verdict() {
       # the one artifact the human is already looking at.
       AUTHOR_WS=$(author_workspace_ref)
       if [ -n "$AUTHOR_WS" ]; then
+        author_pill "$AUTHOR_WS" "Blocker · PR #$PR" xmark.octagon.fill "#EF4444"
         cmux_log workspace status set needs-attention --workspace "$AUTHOR_WS" || true
         cmux_log todo add --workspace "$AUTHOR_WS" --origin agent \
           "PR #$PR: fix review blockers, then /ship to re-review" || true
@@ -325,6 +440,13 @@ announce_verdict() {
       else
         set_status success "blocker for $SHORT — author workspace UNRESOLVED, relay it yourself (see the log)"
       fi
+      ;;
+    *)
+      # A verdict comment whose VERDICT: line this script could not read. The
+      # comment is still the deliverable and the human still has to read it —
+      # what must not happen is the review workspace sitting under a purple
+      # "Reviewing…" pill for a review that finished.
+      review_pill "Verdict posted — read it" eye "#A855F7" done
       ;;
   esac
 }
@@ -351,10 +473,11 @@ fi
 # A separate process, and a DETACHED one, because both ways a review can end
 # without a verdict are invisible from inside it:
 #
-#   - the reviewer SITS THERE. An interactive CLI is interactive by design; a
-#     session parked on an unanswered permission prompt is indistinguishable,
-#     from the outside, from one reading a large diff. The inner half is
-#     blocked on the CLI for as long as that lasts and cannot say a word.
+#   - the reviewer SITS THERE. An interactive CLI is interactive by design,
+#     and the inner half is blocked on it for as long as that lasts, so it
+#     cannot say a word either way. The watcher can: it reads the reviewer's
+#     terminal from outside (see the stall watch in the loop) and tells the
+#     two apart, which is why this file no longer has to guess.
 #   - the WORKSPACE IS CLOSED. cmux kills the whole process tree without
 #     running traps (probed 2026-08-19: a TERM handler in the workspace's
 #     command never fires, and a plain `&` background child dies with it), so
@@ -380,6 +503,10 @@ if [ -n "$AUTO_REVIEW_POLL" ]; then
   waited=0
   interval=60
   restated=0
+  still=0
+  last_screen=
+  stalled=
+  stall_watch=
   while :; do
     sleep "$interval"
     waited=$((waited + interval))
@@ -405,8 +532,63 @@ if [ -n "$AUTO_REVIEW_POLL" ]; then
 
     if ! kill -0 "$REVIEWER_PID" 2>/dev/null; then
       echo "watcher $$: reviewer $REVIEWER_PID is gone, no verdict for $SHORT" >>"$LOG"
-      set_status failure "reviewer session ended without a verdict for $SHORT — run /review $PR yourself"
+      review_died "reviewer session ended without a verdict for $SHORT — run /review $PR yourself"
       exit 0
+    fi
+
+    # The author's session has by now been idle for a full minute, so the
+    # agent wrapper's turn-end pill is written and this swap will not be
+    # clobbered a second later. Once per launch; the stamp inside says so.
+    author_pill_swap
+
+    # --- is the reviewer WORKING, or waiting on a prompt? ------------------
+    # This file used to say the two look identical from out here. They do not:
+    # `cmux read-screen` returns the reviewer's live TUI, and a reviewer that
+    # is working animates a spinner [verified-by-execution, 2026-08-21]. A
+    # screen that has not moved for three consecutive ticks is a screen
+    # waiting for a human.
+    #
+    # Read from OUTSIDE, with no cooperation from the reviewer CLI, and that
+    # is the point: cmux ships hook integrations for sixteen agents and this
+    # repo's reviewer is not one of them, and the reviewer's own hook events
+    # (PreInvocation, PostInvocation, PreToolUse, PostToolUse, Stop) carry no
+    # prompt or notification event to hook even if it were.
+    #
+    # Three ticks is a starting threshold, not a law — one constant, cheap to
+    # retune the first time it cries wolf. It is three MINUTES only while the
+    # poll interval is 60s; past the first hour the interval widens to 300s
+    # and so does this, which is the right trade for a review nobody has
+    # touched in an hour. It re-arms on the first tick whose screen differs,
+    # so an answered prompt puts the pill straight back to Reviewing.
+    #
+    # `cksum` and not a comparison of the text itself: the screen is 40 lines
+    # of TUI, and this loop keeps it across ticks.
+    RW=$(review_workspace_ref)
+    if [ -n "$RW" ]; then
+      raw=$(cmux_q read-screen --workspace "$RW" --lines 40)
+      if [ -n "$raw" ]; then
+        stall_watch=1
+        screen=$(printf '%s' "$raw" | cksum)
+        if [ "$screen" = "$last_screen" ]; then
+          still=$((still + 1))
+        else
+          still=0
+        fi
+        last_screen=$screen
+      fi
+      if [ "$still" -ge 3 ] && [ -z "$stalled" ]; then
+        stalled=1
+        echo "watcher $$: the reviewer's screen has not moved for $still ticks — it is waiting on a prompt" >>"$LOG"
+        set_status pending "the reviewer is waiting on you — answer it in the “${WORKSPACE}” workspace"
+        set_ws_status "$RW" "Waiting for you" bell.fill "#F59E0B" needs-attention
+        CMUX_QUIET=1 cmux notify --title "Review #$PR" \
+          --body "waiting on a prompt in “${WORKSPACE}”" >/dev/null 2>&1 || true
+      elif [ "$still" -eq 0 ] && [ -n "$stalled" ]; then
+        stalled=
+        echo "watcher $$: the reviewer's screen moved again — back to reviewing" >>"$LOG"
+        set_status pending "reviewer running — verdict lands as a PR comment"
+        set_ws_status "$RW" "Reviewing · PR #$PR" eye "#A855F7" working
+      fi
     fi
 
     # Half a day without a verdict is not a slow review, it is an abandoned
@@ -414,15 +596,17 @@ if [ -n "$AUTO_REVIEW_POLL" ]; then
     # `kill -0` against a recycled pid answers "alive" forever.
     if [ "$waited" -ge 43200 ]; then
       echo "watcher $$: giving up on $SHORT after 12h" >>"$LOG"
-      set_status failure "no verdict for $SHORT after 12h — the review was abandoned; run /review $PR yourself"
+      review_died "no verdict for $SHORT after 12h — the review was abandoned; run /review $PR yourself"
       exit 0
     fi
 
     # Past the first hour, say the age out loud rather than leaving `pending`
-    # to be read as "nearly done". Still PENDING, because it still might be:
-    # from out here, thinking and waiting-on-a-prompt look identical, and the
-    # description says exactly that instead of guessing — calling it red would
-    # send the human to run a second review against a lock the first one holds.
+    # to be read as "nearly done". Still PENDING, because it still might be —
+    # calling it red would send the human to run a second review against a
+    # lock the first one holds. The wording now reports what the stall watch
+    # above actually established instead of guessing at it; only a watch that
+    # never managed to read the screen falls back to the old hedge, and it
+    # says so rather than quietly sounding certain.
     # Restated on a cadence that always changes the text, for the same reason
     # the queue announces once per holder: a status write that says nothing new
     # is API traffic. The poll slows to match — a verdict that has not appeared
@@ -435,7 +619,13 @@ if [ -n "$AUTO_REVIEW_POLL" ]; then
     if [ "$((waited - restated))" -ge "$step" ]; then
       restated=$waited
       echo "watcher $$: no verdict for $SHORT after $age" >>"$LOG"
-      set_status pending "no verdict after $age — the reviewer may be waiting on a prompt; check the “${WORKSPACE}” workspace"
+      if [ -n "$stalled" ]; then
+        set_status pending "no verdict after $age — the reviewer is waiting on you in the “${WORKSPACE}” workspace"
+      elif [ -n "$stall_watch" ]; then
+        set_status pending "no verdict after $age — the reviewer's screen is still moving; it is working, not stuck"
+      else
+        set_status pending "no verdict after $age — the reviewer may be waiting on a prompt; check the “${WORKSPACE}” workspace"
+      fi
     fi
   done
 fi
@@ -458,8 +648,9 @@ if [ -z "$AUTO_REVIEW_DETACHED" ]; then
   } >>"$LOG"
 
   # Announce stamps are per-head; a new launch means the old heads' stamps
-  # are history.
-  rm -f "$GIT_COMMON/auto-review-$PR.announced-"*
+  # are history. The author's pill is per-LAUNCH — a re-ship puts that session
+  # back under review, so its swap has to be allowed to happen again.
+  rm -f "$GIT_COMMON/auto-review-$PR.announced-"* "$GIT_COMMON/auto-review-$PR.pill"
 
   if ! command -v cmux >/dev/null 2>&1 || ! cmux_q ping >/dev/null 2>&1; then
     # No silent fallback to a background run: this script exists because a
@@ -646,7 +837,14 @@ while ! mkdir "$LOCK" 2>/dev/null; do
     announced=${holder_pr:-?}
     echo "queued behind the review of #$announced" >>"$LOG"
     set_status pending "queued behind the review of #$announced"
+    review_pill "Queued behind #$announced" clock "#8E8E93" todo
   fi
+  # The author's pill is normally the watcher's first-tick job, but the
+  # watcher does not exist until this review actually starts and a queue can
+  # last hours. Same minute of grace before the write, same stamp: whichever
+  # of the two gets there first writes it, and the other finds the stamp and
+  # leaves it alone.
+  [ "$waited" -ge 60 ] && author_pill_swap
   sleep 10
   waited=$((waited + 10))
 done
@@ -662,6 +860,9 @@ FRESH_SHA=$(gh pr view "$PR" --json headRefOid --jq .headRefOid 2>/dev/null)
 [ -n "$FRESH_SHA" ] && HEAD_SHA="$FRESH_SHA"
 
 set_status pending "reviewer running — verdict lands as a PR comment"
+# `working` and not the table's silence: a review that queued is sitting in
+# `todo`, and fetching, resetting and installing is not waiting.
+review_pill "Preparing…" gearshape "#8E8E93" working
 
 # Now the tree is this review's alone: point it at the PR head.
 git fetch origin "pull/$PR/head" >>"$LOG" 2>&1 || \
@@ -669,7 +870,7 @@ git fetch origin "pull/$PR/head" >>"$LOG" 2>&1 || \
 echo "resetting $WORKTREE to $HEAD_SHA" >>"$LOG"
 if ! git -C "$WORKTREE" reset --hard "$HEAD_SHA" >>"$LOG" 2>&1; then
   echo "auto-review: could not reset $WORKTREE to $HEAD_SHA (see $LOG)" >&2
-  set_status failure "reviewer worktree could not be reset — see the log"
+  review_died "reviewer worktree could not be reset — see the log"
   exit 1
 fi
 # The previous review's scratch. `clean -fd` leaves IGNORED files alone, so
@@ -689,17 +890,19 @@ if [ ! -d "$WORKTREE/node_modules" ]; then
   if [ -f "$MAIN/scripts/setup-worktree.mts" ]; then
     (cd "$WORKTREE" && "$PKG" run worktree:setup) >>"$LOG" 2>&1 || {
       echo "auto-review: worktree:setup failed in $WORKTREE (see $LOG)" >&2
-      set_status failure "reviewer worktree could not be provisioned — see the log"
+      review_died "reviewer worktree could not be provisioned — see the log"
       exit 1
     }
   else
     (cd "$WORKTREE" && $INSTALL) >>"$LOG" 2>&1 || {
       echo "auto-review: install failed in $WORKTREE (see $LOG)" >&2
-      set_status failure "reviewer worktree could not be provisioned — see the log"
+      review_died "reviewer worktree could not be provisioned — see the log"
       exit 1
     }
   fi
 fi
+
+review_pill "Reviewing · PR #$PR" eye "#A855F7" working
 
 # The PROMPT is this script's, not the rendered line's — because it must
 # carry the one fact a reviewer session may never have to hunt for: the
@@ -780,7 +983,7 @@ if [ -n "$HEAD_SHA" ]; then
     set_status success "verdict posted for $SHORT — read it before merging"
     announce_verdict
   else
-    set_status failure "no verdict for $SHORT (exit $STATUS) — see $LOG"
+    review_died "no verdict for $SHORT (exit $STATUS) — see $LOG"
   fi
 fi
 
