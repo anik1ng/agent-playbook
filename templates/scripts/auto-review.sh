@@ -284,10 +284,13 @@ announce_verdict() {
   STAMP="$GIT_COMMON/auto-review-$PR.announced-$SHORT"
   [ -f "$STAMP" ] && return 0
   : >"$STAMP"
-  # The VERDICT line of the comment whose Reviewed-by names this head.
+  # The FULL verdict line of the comment whose Reviewed-by names this head —
+  # `VERDICT: blocker — <reason>` per the review skill. The reason rides into
+  # the notification so the human reads the outcome without opening the PR;
+  # truncated because notification bodies are one line, not a report.
   VERDICT=$(gh pr view "$PR" --json comments --jq '.comments[].body' 2>/dev/null \
     | awk -v s="head $SHORT" 'index($0, s) {f=1} f && /VERDICT:/ {print; exit}' \
-    | grep -oiE 'VERDICT: *[a-z]+' | tail -1)
+    | cut -c1-160)
   CMUX_QUIET=1 cmux notify --title "Review #$PR" \
     --body "${VERDICT:-verdict posted} (head $SHORT)" >/dev/null 2>&1 || true
   case "$VERDICT" in

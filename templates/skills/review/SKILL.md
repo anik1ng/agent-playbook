@@ -105,11 +105,25 @@ Checklist, in priority order:
      removed, `git status` as clean as it was at the start.
    - Run the gate the author claims (AGENTS.md "Getting to master" defines it) plus the
      affected suites. A red gate is itself a blocker.
-6. **Freshness of the base.** Check how far the branch is behind the default branch. A
-   stale base can silently reverse a recent merge in the squash — a branch cut before a
-   cleanup PR will re-add what that PR removed, and `.gitignore` does not stop an
-   already-committed file. If the base moved under the PR, the author rebases before
-   you approve.
+6. **Freshness of the base.** Check how far the branch is behind the default branch —
+   but staleness ALONE is not a blocker. With parallel PRs the base moves under every
+   open review the moment one merges; an unconditional "rebase first" verdict turns each
+   merge into a full re-review of every other PR, and the protection it duplicates
+   already exists at merge time (the ruleset's "require branches up to date" plus the
+   human's ritual force an Update branch and green CI on the merged tree). Decide by
+   what the staleness actually is:
+   - Not behind → done.
+   - Behind with a merge CONFLICT → blocker: the author rebases and resolves.
+   - Behind, no conflict, but the PR's files OVERLAP what the default branch changed
+     since the merge-base (`git diff --name-only $(git merge-base HEAD origin/<default>)
+     origin/<default>` against the PR's file list) → inspect the interaction. This is
+     the real hazard the check exists for: a stale base can silently reverse a recent
+     merge in the squash — a branch cut before a cleanup PR re-adds what that PR
+     removed, and `.gitignore` does not stop an already-committed file. Blocker only
+     when the combined result would actually reverse or break something.
+   - Behind, no conflict, no overlap → NOT a blocker. Approve, and put one required
+     line in the verdict body: `Base: <N> commits behind, no overlap, merges clean —
+     Update branch and wait for green CI before merging.`
 7. **Hazards.** Secrets/PII in logs, weakened auth or rate limits, broken types, schema
    changes that need a committed generated migration in the SAME PR, magnet files touched
    while another PR is open on the same file (run `gh pr list` and check the overlap
@@ -169,13 +183,20 @@ and a verdict names the head it applies to, so a later push cannot inherit an ap
 never earned. State the family you actually are — if it matches the author's, put it here
 anyway and repeat the fact in the verdict body.
 
-Then, on the following lines:
+Then, on the following lines. The `VERDICT:` line carries the essence ON THE SAME LINE —
+it is what the launcher's desktop notification shows and what the human scans first, and
+a bare `VERDICT: blocker` forces them into the comment to learn why:
 
-- `VERDICT: approve` plus a short plain-language summary: what the change does, what
-  you checked and cleared, which probes/mutations you ran and what they returned, and
-  what to watch during manual testing.
-- `VERDICT: blocker` plus a numbered list of blockers, each with file:line and a
-  one-sentence reason the author can act on. No style nitpicks — CI owns formatting.
+- `VERDICT: approve — <one-line summary of what the change does>`, then a short
+  plain-language report: what you checked and cleared, which probes/mutations you ran
+  and what they returned, and what to watch during manual testing.
+- `VERDICT: blocker — <the single most important reason, one line>`, then a numbered
+  list of ALL blockers, each with file:line and a one-sentence reason the author can
+  act on. No style nitpicks — CI owns formatting.
+
+Your session's own closing message OPENS with that same `VERDICT:` line, before any
+narrative — the human scans a terminal the same way they scan a PR, and a verdict
+buried under a process report is a verdict they have to dig for.
 
 Report EVERYTHING you find, not only blockers: after the verdict, list non-blocking
 findings under a `Minor (non-blocking)` heading — one line each. The author decides what
@@ -200,3 +221,9 @@ names the new head sha — never edit the old one, so the history shows what was
 against what. Verify every prior blocker against the pushed code (not against the commit
 message or the author's description), and re-run the probes that caught them. Fixes can
 introduce new defects — the whole checklist applies to the delta too.
+
+Exception — base updates. "A verdict names the head it applies to" exists so new CODE
+cannot inherit an approval; a push that only refreshes the base carries no new code. An
+"Update branch" merge commit, or a rebase whose `git range-diff <approved-head>...HEAD`
+comes back empty, leaves the PR's diff unchanged — the prior approve stands and no
+re-review is owed. Anything that changes the patch itself gets the full re-review.
