@@ -74,46 +74,26 @@ finished branch to a PR and launches the auto-review; `/review <n>` is the manua
 the same reviewer pass.
 
 **The review starts itself.** With a reviewer CLI chosen at adoption (a different model
-family than the tool writing your PRs) and the cmux workspace manager present, `/ship`
-opens a visible workspace `review #<pr>` beside yours: the reviewer works in its own
-worktree, posts the verdict comment, and an `auto-review` commit status on the PR tracks
-the run. Your part shrinks to reading verdicts and merging. Skip it at adoption and
-reviews stay manual, with nothing else changed.
+family than the tool writing your PRs), `/ship` opens a visible cmux workspace
+`review #<pr>` beside yours: the reviewer works in its own worktree, posts the verdict
+comment, and an `auto-review` commit status on the PR tracks the run. Your part shrinks
+to reading verdicts and merging. cmux is what makes this automatic — skip either at
+adoption and reviews stay manual, with nothing else changed.
 
 **Why `.agents/`**: Codex/ChatGPT and Antigravity/Gemini read it directly; Claude Code
 reads `.claude/skills/`, which symlinks into it. One real copy, nothing to drift — and
 the review protocol must be readable by a tool from another vendor, which is the point.
 
-**Assumptions**: Node/TypeScript, GitHub with a working `gh`, and — for the automatic
-reviewer — cmux. Other toolchains and forges: the templates say what each piece is for;
+**Assumptions**: Node/TypeScript; GitHub with a working `gh`; and cmux — the workspace
+manager this workflow's automation is built around: the automatic reviewer and task
+workspaces require it, and without it reviews are manual (`/review <n>`) and worktrees
+are plain git. Other toolchains and forges: the templates say what each piece is for;
 adapt with judgment.
 
 `AGENTS.md` in the target repo owns every rule; the skills point at it and lose on drift.
 Its lists (magnet files, "Never", decision records) ship nearly empty on purpose — fill
 them one line at a time, each the day something actually breaks. A fresh repo carrying
 someone else's incident history is cargo cult.
-
-## This repository is PUBLIC — no private details, ever
-
-Nothing here may identify an adopted repository or a person: no project names, no
-domains, no personal paths, no issue numbers from private repos, no personal names, no
-e-mail addresses. An incident reference stays fully anonymous — "seen live in an adopted
-repo" — the lesson travels, the identity does not. Agents editing this playbook: a
-project name or an e-mail address in a diff is a blocker; anonymize before committing,
-in file content AND in the commit message.
-
-This applies doubly to the `templates/` tree — those files are COPIED into adopting
-repositories verbatim, so a literal identity written there would be installed into every
-repo that adopts the playbook. Commit identity is per-machine configuration
-(`git config user.name` / `user.email`), never a literal in any committed file.
-
-## Committing to this repository
-
-A session whose commits would not verify as the owner's — cloud harnesses sign with
-their own ephemeral keys, which GitHub marks "Unverified" — never pushes over git.
-It commits through the GitHub API instead: those commits GitHub signs server-side,
-so they land attributed to the owner and "Verified". Pushing over git is for the
-owner's own machine.
 
 ## License
 

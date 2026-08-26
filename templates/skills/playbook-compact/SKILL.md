@@ -5,13 +5,11 @@ description: Mercilessly compact this repository's accumulated agent memory — 
 
 You are compacting this repository's accumulated memory. The auto-loaded files
 (`CLAUDE.md`, `AGENTS.md` and whatever they `@`-include) are paid for by EVERY session
-before it reads a line of code, and lean context measurably improves the agent —
-Anthropic cut ~80% of Claude Code's own system prompt for the Claude 5 generation with
-no measured eval loss. These files grow by design (a rule per incident) and nothing ever
-removes; this skill is the forgetting. The measure of success is **nothing lost**, not a
-line count hit — there are deliberately NO numeric targets: a five-file repo and an
-archive browser do not share a number, and a hard cap makes an agent cut arbitrarily to
-fit.
+before it reads a line of code, and lean context measurably improves the agent. These
+files grow by design (a rule per incident) and nothing ever removes; this skill is the
+forgetting. The measure of success is **nothing lost**, not a line count hit — there are
+deliberately NO numeric targets: a five-file repo and an archive browser do not share a
+number, and a hard cap makes an agent cut arbitrarily to fit.
 
 **Own branch, own PR — never mixed with a playbook sync.** A sync changes mechanism;
 this changes the project's memory. Ship by this repo's own rules; the normal independent

@@ -129,5 +129,6 @@ how.
   `.github/workflows/security.yml`.
 - Confirm skill discovery in each agent tool you actually use (fresh session, make it
   LIST the skills — an agent asked whether it can see a skill says yes without looking).
-- Package-manager cooldown (`minimumReleaseAge` + `trustLockfile` for pnpm) if the agent
-  didn't set it during adoption.
+- Package-manager cooldown (`minimumReleaseAge` for pnpm) if the agent didn't set it
+  during adoption. Never `trustLockfile: true` — it turns off pnpm's supply-chain
+  verification pass; ADOPT.md says why.
