@@ -1,0 +1,266 @@
+/**
+ * The decisions behind `task:start` / `task:finish`, pulled out of the
+ * scripts so they can be tested without git, a workspace manager or a
+ * filesystem.
+ *
+ * Same split as worktree-utils.mts, for the same reason: the caller gathers
+ * the facts and passes them in, and the parts worth pinning are the ones that
+ * decide where a directory is created and which workspace gets CLOSED.
+ *
+ * Imports nothing but node builtins and the pure module beside it —
+ * `task:start` runs `worktree:setup` in a worktree that has no `node_modules`
+ * yet, and must itself run in one too.
+ */
+import path from "node:path";
+
+import { isInside } from "./worktree-utils.mts";
+
+/**
+ * The agent the workspace's pane starts. Overridable via TASK_AGENT_CMD
+ * because this is the one thing in here that is about a vendor rather than
+ * about the repo: the reviewer runs a different family on purpose (AGENTS.md
+ * → "Model routing").
+ */
+export const DEFAULT_AGENT_COMMAND = "claude";
+
+/**
+ * `agentCommand` with `prompt` appended as ONE shell-quoted argument, or
+ * unchanged when the prompt is empty.
+ *
+ * This seam exists because a workspace whose pane runs a bare `claude` opens
+ * an agent that sits at its input waiting for a task nobody is going to
+ * type: the orchestrator that spawned it has no reliable way in afterwards —
+ * `cmux send` races the CLI's startup, and a first turn lost to that race
+ * looks exactly like a task that was never given. The CLIs this module
+ * launches (claude, agy, codex — TASK_AGENT_CMD picks) all take an initial
+ * prompt as a positional argument, so the task rides the launch command
+ * itself and there is no race to lose.
+ *
+ * Single-quote shell quoting, because the layout's `command` string is run
+ * by a shell (auto-review.sh's `--command` — an env-var prefix plus quoting —
+ * relies on the same fact) and the prompt is free text: `/do 46` must arrive
+ * as one argv entry, and a quote inside the prompt must not end the quoting.
+ */
+export function agentLaunchCommand(
+  agentCommand: string,
+  prompt: string,
+): string {
+  if (prompt === "") return agentCommand;
+  return `${agentCommand} '${prompt.replaceAll("'", `'\\''`)}'`;
+}
+
+/**
+ * Task names become a directory name and a workspace name, so they are
+ * restricted to what is safe in both. A separator or `..` would let a name
+ * escape the sibling convention and put a worktree anywhere on disk.
+ */
+export function validateTaskName(name: string): string | null {
+  if (name.length === 0) return "the name is empty";
+  if (name.startsWith("-")) return `“${name}” starts with a dash`;
+  if (/[/\\]/.test(name)) return `“${name}” contains a path separator`;
+  if (name === "." || name === "..") return `“${name}” is a path, not a name`;
+  if (!/^[A-Za-z0-9][A-Za-z0-9._-]*$/.test(name)) {
+    return `“${name}” has characters outside [A-Za-z0-9._-]`;
+  }
+  return null;
+}
+
+/**
+ * `<parent of the main checkout>/<repo-dir-name>-wt-<name>` — always
+ * absolute, always a SIBLING of the main checkout (the convention
+ * `worktree:teardown --sweep` looks in; a worktree parked elsewhere is
+ * invisible to it). The prefix is derived from the main checkout's own
+ * directory name at runtime, so the scripts carry no hardcoded repo name.
+ */
+export function worktreePathFor(mainCheckout: string, name: string): string {
+  const prefix = `${path.basename(mainCheckout)}-wt-`;
+  return path.join(path.dirname(mainCheckout), `${prefix}${name}`);
+}
+
+/**
+ * The task name a worktree path encodes, or `null` when the path is not a
+ * `<repo-dir-name>-wt-<name>` SIBLING of this main checkout — the exact
+ * inverse of `worktreePathFor`, and the same convention, so the two cannot
+ * drift apart without one of them failing its tests.
+ *
+ * This is what lets `task:finish -- --here` be run with no argument from
+ * inside the worktree being retired: the directory already names the task.
+ * A path that merely CONTAINS `-wt-` somewhere else on disk answers `null` —
+ * a worktree parked outside the convention is invisible to `--sweep` too,
+ * and guessing a name for it would retire the wrong thing.
+ */
+export function taskNameFromWorktreePath(
+  mainCheckout: string,
+  worktreePath: string,
+): string | null {
+  if (path.dirname(worktreePath) !== path.dirname(mainCheckout)) return null;
+  const prefix = `${path.basename(mainCheckout)}-wt-`;
+  const dirName = path.basename(worktreePath);
+  if (!dirName.startsWith(prefix)) return null;
+  const name = dirName.slice(prefix.length);
+  return validateTaskName(name) === null ? name : null;
+}
+
+/**
+ * One workspace as `cmux workspace list --json` reports it.
+ *
+ * `title` is the field to match on: cmux always populates it — with the
+ * custom name when there is one (including after `workspace rename`) and with
+ * a derived name otherwise, where `custom_title` is null
+ * [verified-by-execution, cmux 0.64.22, 2026-08-10]. `custom_title` is
+ * declared here because the JSON carries it, not because anything reads it.
+ *
+ * `current_directory` is the workspace's cwd as cmux reports it. It is the
+ * STABLE key: a title is a human-readable field that gets renamed by
+ * definition (a real blocker announcement was lost to exactly that — the
+ * author's workspace was called "do #9 loop guard", not "9"), while the
+ * cwd is how cmux itself identifies the workspace in `workspace.closed`
+ * payloads. Title first for compatibility, cwd as the fallback that
+ * survives a rename — see `resolveTaskWorkspace`.
+ */
+export type ListedWorkspace = {
+  ref: string;
+  title: string;
+  custom_title?: string | null;
+  current_directory?: string | null;
+};
+
+export type WorkspaceMatch =
+  | { kind: "one"; ref: string }
+  | { kind: "none" }
+  | { kind: "ambiguous"; refs: string[] };
+
+/**
+ * Find the workspace called `name`.
+ *
+ * "Ambiguous" is a real outcome, not defensive padding: cmux does NOT refuse
+ * a second workspace with an existing name and does not reuse the old one —
+ * it creates a duplicate [verified-by-execution, cmux 0.64.22, 2026-08-10].
+ * So `close` must never guess which of two it was asked for, and `create`
+ * must check first rather than trust cmux to.
+ */
+export function findWorkspace(
+  workspaces: readonly ListedWorkspace[],
+  name: string,
+): WorkspaceMatch {
+  const refs = workspaces
+    .filter((workspace) => workspace.title === name)
+    .map((workspace) => workspace.ref);
+
+  const [ref] = refs;
+  if (ref === undefined) return { kind: "none" };
+  if (refs.length === 1) return { kind: "one", ref };
+  return { kind: "ambiguous", refs };
+}
+
+/**
+ * Find the workspace belonging to task `name` whose worktree is at
+ * `worktreePath`: by title first (the historical key, still right wherever
+ * nobody renamed anything), then by `current_directory` when the title
+ * match comes up EMPTY.
+ *
+ * The fallback exists because titles get renamed and cwds do not: a task
+ * workspace renamed to "do #9 loop guard" is unfindable by title "9", but
+ * its cwd is still the worktree. The fallback never overrides a title
+ * match — including an ambiguous one, which stays a refusal rather than
+ * being "rescued" by cwd, because two workspaces claiming one name is a
+ * situation to stop on, not to guess through.
+ *
+ * `worktreePath` and every `current_directory` must be normalized by the
+ * CALLER (realpath where the directory exists) — this module has no
+ * filesystem on purpose. Containment rather than equality, because a
+ * workspace's reported cwd can be a pane's subdirectory of the worktree.
+ * Ambiguity by cwd is a real outcome too (two workspaces opened on one
+ * worktree) and closes nothing, same as by title.
+ */
+export function resolveTaskWorkspace(
+  workspaces: readonly ListedWorkspace[],
+  name: string,
+  worktreePath: string | null,
+): WorkspaceMatch {
+  const byTitle = findWorkspace(workspaces, name);
+  if (byTitle.kind !== "none" || worktreePath === null) return byTitle;
+
+  const refs = workspaces
+    .filter(
+      (workspace) =>
+        typeof workspace.current_directory === "string" &&
+        workspace.current_directory !== "" &&
+        isInside(workspace.current_directory, worktreePath),
+    )
+    .map((workspace) => workspace.ref);
+
+  const [ref] = refs;
+  if (ref === undefined) return { kind: "none" };
+  if (refs.length === 1) return { kind: "one", ref };
+  return { kind: "ambiguous", refs };
+}
+
+/** One group as `cmux workspace-group list --json` reports it. */
+export type ListedGroup = {
+  ref: string;
+  member_workspace_refs?: string[];
+};
+
+/**
+ * The group `callerRef` belongs to, or `null`.
+ *
+ * Without it a new workspace lands outside the caller's group, at the bottom
+ * of the sidebar — which is exactly where you do not look for it. cmux reports
+ * membership only from the GROUP side; a workspace's own JSON says nothing
+ * about which group holds it [verified-by-execution, cmux 0.64.22,
+ * 2026-08-10], so the caller's ref has to be matched against the members.
+ */
+export function findCallerGroup(
+  groups: readonly ListedGroup[],
+  callerRef: string | null,
+): string | null {
+  if (callerRef === null) return null;
+  const group = groups.find((candidate) =>
+    (candidate.member_workspace_refs ?? []).includes(callerRef),
+  );
+  return group?.ref ?? null;
+}
+
+/**
+ * The workspace ref inside a cmux acknowledgement line, or `null`.
+ *
+ * Every cmux command acknowledges on stdout with `OK <something>` — `workspace
+ * create` answers `OK workspace:22` — and CMUX_QUIET=1 does NOT strip that
+ * prefix: it silences the deprecation notices, nothing else
+ * [verified-by-execution, cmux 0.64.22, 2026-08-14]. So the captured output of
+ * a create is the whole line, and the ref half is the only part that is a
+ * HANDLE: cmux refuses the rest — `Invalid workspace handle: OK workspace:22
+ * (expected UUID, ref like workspace:1, or index)`. That refusal is what left
+ * `auto-review.sh` parking every reviewer at the end of its group instead of
+ * under its author. Here the leak was only cosmetic (a console line reading
+ * `created (OK workspace:22)`), but it is the same ack and the same trap, so
+ * both sides now parse rather than trust.
+ *
+ * Matches the ref instead of trimming a known prefix — `OK ` is one ack shape
+ * among several, and the ref is the part that has a syntax.
+ */
+export function workspaceRefFromAck(ack: string | null): string | null {
+  return ack?.match(/workspace:\d+/)?.[0] ?? null;
+}
+
+/**
+ * ONE pane, running the agent. This used to be a horizontal split with an
+ * empty shell on the right — "the shell you drop into while the agent works"
+ * — but in practice that pane got dismissed by hand on every task. Evidence
+ * from the repo that changed it first (a live incident) [verified-by-execution,
+ * 2026-08-21]: all four task workspaces open at the time reported exactly ONE
+ * pane via `cmux list-panes`, because the human had closed the second one
+ * each time. A split that is always dismissed costs more than it gives, and
+ * `cmux new-split right` covers the rare case where a shell is wanted.
+ *
+ * Shape confirmed by creating a workspace [verified-by-execution, cmux
+ * 0.64.22, 2026-08-21]: a root that is a single pane object — no direction,
+ * no split, no children — is accepted, the terminal inherits `--cwd`, and
+ * the command runs in it.
+ */
+export function buildLayout(agentCommand: string): string {
+  return JSON.stringify({
+    pane: { surfaces: [{ type: "terminal", command: agentCommand }] },
+  });
+}

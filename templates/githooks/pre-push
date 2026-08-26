@@ -1,0 +1,107 @@
+#!/bin/sh
+# The default branch is PR-only. Without a server-side branch ruleset this
+# client-side hook is the only lock; once the ruleset is active (the playbook's
+# SETUP.md §2 — a paid-plan feature on private repos), GitHub refuses direct
+# pushes server-side and this hook stays the local first line + the static
+# gate. It does two things:
+#
+#   1. Blocks any direct push to the default branch, including force-pushes and
+#      deletion.
+#   2. Runs the static gate (format:check, lint, type-check — whichever of those
+#      scripts exist) before any branch push, so a red push never reaches CI.
+#      The full test suite deliberately stays with CI and the local gate: tests
+#      often need a database or fixtures that remote agent sessions don't have.
+#
+# Install it by pointing git at the directory (commit this, and have your
+# package manager's "prepare" script run it so every clone gets it):
+#
+#     git config core.hooksPath .githooks
+#
+# Human emergency overrides (agents: never use these — fix the problem instead):
+#   ALLOW_DIRECT_PUSH=1 git push ...   # direct push to the default branch
+#   SKIP_PUSH_GATE=1 git push ...      # skip the static gate
+
+# Detected at runtime so this file is byte-identical in every repository.
+# origin/HEAD is set on clone; when it is missing the fallback below protects
+# BOTH conventional names — fail closed, never open, for a lock.
+PROTECTED_BRANCH=$(git symbolic-ref --short refs/remotes/origin/HEAD 2>/dev/null | sed 's|^origin/||')
+
+is_protected() { # $1 = remote ref
+  if [ -n "$PROTECTED_BRANCH" ]; then
+    [ "$1" = "refs/heads/$PROTECTED_BRANCH" ]
+  else
+    [ "$1" = "refs/heads/main" ] || [ "$1" = "refs/heads/master" ]
+  fi
+}
+
+gate_needed=0
+while read -r _local_ref local_sha remote_ref _remote_sha; do
+  if is_protected "$remote_ref" && [ "${ALLOW_DIRECT_PUSH:-}" != "1" ]; then
+    echo "pre-push: direct push to ${PROTECTED_BRANCH:-the default branch} is blocked — it only changes via a PR merged by the human." >&2
+    echo "pre-push: (emergency override for humans: ALLOW_DIRECT_PUSH=1 git push ...)" >&2
+    exit 1
+  fi
+  # A branch deletion pushes an all-zero local sha — there is nothing to verify.
+  case "$remote_ref" in
+    refs/heads/*)
+      case "$local_sha" in
+        *[!0]*) gate_needed=1 ;;
+      esac
+      ;;
+  esac
+done
+
+if [ "$gate_needed" != "1" ] || [ "${SKIP_PUSH_GATE:-}" = "1" ]; then
+  exit 0
+fi
+
+# Same runtime detection as the branch above: the lockfile names the manager.
+if [ -f pnpm-lock.yaml ]; then PKG=pnpm
+elif [ -f yarn.lock ]; then PKG=yarn
+elif [ -f bun.lock ] || [ -f bun.lockb ]; then PKG=bun
+else PKG=npm
+fi
+
+if ! command -v "$PKG" >/dev/null 2>&1 || [ ! -d node_modules ]; then
+  echo "pre-push: the static gate needs an installed toolchain — run '$PKG install' first." >&2
+  exit 1
+fi
+
+# Only run a script the project actually defines, so this hook is the same file
+# in a repo with three of these and a repo with one.
+has_script() {
+  node -e "process.exit(require('./package.json').scripts && require('./package.json').scripts['$1'] ? 0 : 1)" 2>/dev/null
+}
+
+# Name only the checks that actually run: this hook is the same file in a repo
+# with three of these scripts and a repo with one, and a message listing checks
+# that never ran teaches the reader to distrust the message.
+GATE_SCRIPTS=""
+for script in format:check lint type-check; do
+  has_script "$script" && GATE_SCRIPTS="${GATE_SCRIPTS:+$GATE_SCRIPTS, }$script"
+done
+
+if [ -z "$GATE_SCRIPTS" ]; then
+  exit 0
+fi
+
+echo "pre-push: static gate ($GATE_SCRIPTS)..."
+# A loop with an early `return 1`, deliberately, rather than `! a && b && c`:
+# in that form `!` inverts only `a` and lets a red lint or type-check through.
+# The gate must fail if ANY check fails.
+run_gate() {
+  for script in format:check lint type-check; do
+    if has_script "$script"; then
+      "$PKG" run "$script" || return 1
+    fi
+  done
+  return 0
+}
+
+if ! run_gate; then
+  echo "pre-push: static gate failed ($GATE_SCRIPTS) — fix what the red check reported, then push again." >&2
+  echo "pre-push: (emergency override for humans: SKIP_PUSH_GATE=1 git push ...)" >&2
+  exit 1
+fi
+
+exit 0

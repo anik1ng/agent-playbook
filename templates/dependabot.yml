@@ -1,0 +1,57 @@
+# Dependabot version updates — keeps deps current with grouped, low-noise PRs.
+# Security updates (CVE patches) are enabled separately in repo settings and are
+# not configured here. They also BYPASS the cooldowns below by design: a known-
+# exploited CVE is a bigger risk than a fresh-release one.
+#
+# Cooldowns are a supply-chain measure, not a noise measure: nearly every malicious
+# npm release is detected and pulled within 24–72h, so a mandatory wait skips that
+# exposure window. Numbers follow current market practice (GitHub's own 3-day
+# dependabot default, Renovate's npm best-practices preset; 14 days for majors per
+# StepSecurity). Configured explicitly rather than inherited from the platform
+# default, because defaults change silently and this file is the documented policy.
+# The local half of the same policy is your package manager's minimum-release-age
+# setting — see docs/RUNBOOK.md "Dependency cooldowns".
+#
+# A repo that builds its own image adds a `docker` entry per ADOPT.md — a declared
+# local part every sync preserves; this template ships without it on purpose.
+version: 2
+updates:
+  # JS/TS dependencies (pnpm and yarn both use the npm ecosystem here).
+  - package-ecosystem: npm
+    directory: /
+    schedule:
+      interval: weekly
+      day: monday
+    open-pull-requests-limit: 5
+    cooldown:
+      semver-major-days: 14
+      semver-minor-days: 3
+      semver-patch-days: 3
+    labels:
+      - dependencies
+    groups:
+      # One PR per week for all non-major bumps — keeps the queue small.
+      npm-minor-patch:
+        update-types:
+          - minor
+          - patch
+    # Majors arrive as individual PRs so breaking changes get reviewed on their own.
+
+  # GitHub Actions used in .github/workflows/*.
+  - package-ecosystem: github-actions
+    directory: /
+    schedule:
+      interval: weekly
+      day: monday
+    cooldown:
+      semver-major-days: 14
+      semver-minor-days: 3
+      semver-patch-days: 3
+    labels:
+      - dependencies
+      - github-actions
+    groups:
+      actions-all:
+        update-types:
+          - minor
+          - patch

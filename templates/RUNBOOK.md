@@ -1,0 +1,294 @@
+# RUNBOOK — the human's page
+
+<!-- Customize: nothing in this preamble — it is what makes agents keep the page current. -->
+
+Everything YOU run, click, or must remember to operate this project day to day. Agents keep
+this file current: any PR that adds something human-facing (a script, a page, an env var, a
+ritual) must update it — the PR template's Docs section and the reviewer's docs-honesty item
+enforce that. If you catch yourself remembering something this page doesn't say, that's a bug
+in this page — file it.
+
+---
+
+## Daily development
+
+<!-- Customize: add the commands you actually type; delete the lines that don't apply. -->
+
+- **Starting a task**: type `/do <n>` in the agent session — that replaces the whole
+  typed preamble. It reads `AGENTS.md` and issue #n **including its comments** (spec
+  amendments live there), then decides what the issue needs next: a substantial issue with
+  no spec turns the session into a brainstorm that writes the spec and the plan (`AGENTS.md`
+  "Specs and plans") and stops; otherwise it gets onto the right branch, implements, and
+  ships the PR. Filing a two-line reminder issue is fine — `/do` grows it when its turn
+  comes. `/ship` on its own re-runs just the tail — rebase, gate, push, PR — on a branch
+  whose work is already done and committed.
+- **Keeping the playbook current**: `/playbook-update` syncs this repo against the
+  playbook (it answers "up to date" in seconds when nothing moved); `/playbook-compact`,
+  run occasionally, shrinks the accumulated memory files (`CLAUDE.md`, `AGENTS.md`, this
+  page) without losing rules — both show their report before writing, both land as a
+  normal PR you merge.
+- **Where the skills live**: `.agents/skills/<name>/SKILL.md`, in this
+  repo. They are ordinary files — edit them when a rule of yours changes, same as any doc.
+  `.claude/skills/*` are symlinks to them, because Claude Code doesn't read `.agents/`. Every
+  other agent tool reads `.agents/` directly, which is the point: the reviewer is supposed to
+  be a different model family than the author, so the protocol can't live in one vendor's
+  plugin.
+- **Checking the wiring still holds**: ask any agent session to run the "Verify the
+  installation" checklist at the end of `ADOPT.md` in the playbook repository. It re-verifies
+  what adoption set up — the skill symlinks resolve, no placeholder survived, `core.hooksPath`
+  points at `.githooks`, the hook actually refuses a push to the default branch, merges are
+  squash-only. Worth a run after every fresh clone and every new worktree: `core.hooksPath` is
+  a per-clone setting that is never committed, so a new clone starts with the pre-push lock
+  disarmed and nothing says so.
+- **Dev servers**: only you start/stop them. Agents never do — if a server is behaving oddly,
+  restart it yourself after a merge.
+- **When a verdict lands** _(cmux; delete this line if this machine has none)_: the
+  auto-review launcher announces it by itself — a desktop notification
+  (`Review #<pr>` / `VERDICT: …`); on an approve the PR page opens as a background
+  tab in the reviewer's workspace, already waiting when you switch over; on a blocker
+  the author's task workspace flips to the `needs-attention` sidebar lane, gets a
+  checklist item, and its live session receives the fix instruction as a user message.
+  Automatic, best-effort, nothing to configure; no cmux → no announcements, everything
+  else unchanged. Two more events notify, and only these two: **the reviewer is waiting
+  on a prompt** (its terminal has not moved for three minutes) and **the review ended
+  without a verdict**. A review that merely started, queued or took the lock says
+  nothing — it needs nothing from you. If you ever wire more notifications, wire them to EVENTS (a verdict landed),
+  never to every tool call: a notify per "ask" against a broad allowlist announces
+  prompts that never come — once per command, for the whole review. Per-ask announcements
+  pair only with a NARROW allowlist: both or neither.
+- **The local gate** (what CI will run anyway):
+
+      {{PKG_MANAGER}} run format:check && {{PKG_MANAGER}} run type-check && {{PKG_MANAGER}} run lint && {{PKG_MANAGER}} run knip && {{TEST_CMD}}
+
+## Worktrees (parallel tasks)
+
+<!-- Customize: if you declined the worktree module at adoption, delete this section
+     EXCEPT the reviewer-worktree line and the status-pill entry — the pill is not part
+     of the module (it reports any cmux workspace of this repo), and without the module
+     nothing can retire the reviewer directory for you; a deleted section is how both
+     go unnoticed. -->
+
+
+- **Start a task in its own worktree**: `{{PKG_MANAGER}} run task:start -- <name> <branch>
+  [prompt]` — cuts `<branch>` from the latest default branch into `../<repo>-wt-<name>`,
+  provisions it (filtered `.env` + install), and opens a workspace running the agent beside
+  yours where cmux is running (`cmux new-split right` adds a shell pane if you want one).
+  Everything after the branch is the agent's FIRST TURN (`… fix/links "/do 46"`) — pass it
+  whenever the task is already known: a workspace opened without it is an agent waiting
+  for input nobody is going to type. Without cmux the worktree is still ready but the
+  prompt was NOT delivered; the script prints the launch command to run after `cd`.
+- **What a task workspace's pill says** _(cmux; delete this entry if this machine has none)_:
+  five states, and **amber means the agent literally cannot proceed without you** — never
+  just "it went quiet". That distinction is the whole design; the rest follows from it.
+
+  | Pill | What it means | Lane |
+  | --- | --- | --- |
+  | 🔨 `Working` | The agent is moving. Past a minute it reads `Working 5m` | left alone |
+  | 🔔 `Waiting for you` | A permission prompt, an options dialog, or a plan waiting for approval | `needs-attention` |
+  | 🔔 `Asked you a question` | The turn ended on a question in prose | `needs-attention` |
+  | ⚙️ `Background work` | The turn ended, you are not needed, but a background task is still running | left alone |
+  | ✅ `Finished` | The turn ended and nothing is needed | left alone |
+
+  Written by `.agents/task-status.sh` (with `.agents/task-status-stop.mjs` for the turn-end
+  cases), wired as Claude Code hooks in `.claude/settings.json` — under its own `task` key,
+  so it sits beside cmux's own `claude_code` pill instead of fighting it, and below the
+  `review` pill `auto-review.sh` writes. Nothing to configure; outside cmux it does nothing
+  at all. It exists because cmux's Claude wrapper clears `claude_code` when you answer a
+  permission prompt without writing `Running` back, so a working task workspace used to go
+  blank for the rest of the run.
+  **Known limit: a hard kill leaves the pill behind.** A crash, `kill -9`, or quitting
+  cmux skips the `SessionEnd` hook, so a dead workspace can keep claiming `Working`.
+  Closing the workspace removes it — nothing else will.
+  **Known limit: the elapsed time stands still inside a long tool call.** The pill only
+  updates when a hook fires, so a 10-minute `docker build` is one event, not six hundred:
+  `Working 2m` can sit unchanged for the whole build and then jump. The number is a floor
+  on how long the turn has run, not a live clock.
+  **Known limit: the question pill is a guess, and a deliberately crude one.** It fires on
+  a trailing `?` on the agent's last line, so "Which one? Let me know." reads as finished
+  and a report that closes on a rhetorical question reads as a question. Wrong colour,
+  nothing worse. The three `Waiting for you` triggers are machine facts and do not guess.
+- **Retire it when the PR lands**: `{{PKG_MANAGER}} run task:finish -- <name>` — removes
+  the worktree, deletes the branch ONLY when that provably loses nothing (merged PR
+  containing the tip, or everything pushed), closes the workspace last. A refusal means
+  uncommitted work is in there — that refusal is the safety net, don't force it.
+- **Or finish from INSIDE the task**: `{{PKG_MANAGER}} run task:finish -- --here`, typed
+  in the task's own workspace (no name needed — the worktree names the task). It detaches
+  itself, runs the same teardown, and closes the very workspace you typed it in; the
+  outcome arrives as a desktop notification, and the record lands in
+  `.git/task-finish-<name>.log`. If the repo carries `.cmux/cmux.json`, the same command
+  is the **Finish task** entry in cmux's ⌘⇧P palette (first run asks a one-time trust
+  question — that is cmux's own model for project-local actions). A refusal (uncommitted
+  work) leaves the workspace open and says so in the notification.
+- **Forgot to finish? Nothing to do.** `{{PKG_MANAGER}} run worktree:gc` compares the
+  worktrees on disk with the workspaces open in cmux and retires every task that has no
+  open workspace AND is provably DONE — merged PR containing the branch tip, clean tree.
+  Anything less than proof is left untouched, so closing a workspace mid-review stays a
+  free gesture, and a merged task with uncommitted leftovers announces itself instead of
+  being cleaned. `task:start` runs a gc in its preamble, so starting the next task sweeps
+  up after the finished ones — there is no daemon to keep running, and closes that happen
+  with cmux quit entirely are caught the same way, because gc reads current state, not
+  events.
+- **Tidy up leftovers**: `{{PKG_MANAGER}} run worktree:teardown -- --sweep` — reports
+  stale registrations, stray directories and orphaned branches; prints deletion commands
+  but never deletes a branch itself.
+- **The reviewer's worktree** — `../<repo>-wt-review`, one per repository, created on the
+  first auto-review and kept (that is what makes the folder-trust prompt a one-time
+  question and skips a reinstall per review). It holds a detached checkout plus
+  `node_modules`. Nothing retires it on a schedule: remove it when you want the disk back
+  or a review is stuck on a bad tree — `{{PKG_MANAGER}} run worktree:teardown --
+  --disposable ../<repo>-wt-review`, or without this module
+  `git worktree remove --force ../<repo>-wt-review` then `git worktree prune`. The next
+  `/ship` recreates it. Directories named
+  `<repo>-wt-review-<number>` are from the older per-PR scheme; the launcher retires them
+  where the worktree module is installed and tells you about them where it isn't.
+- **What worktrees may see**: the `.env` allowlist in `scripts/worktree-utils.mts` —
+  ships empty; every key you add becomes visible to every worktree, including a
+  reviewer's. Secrets stay out.
+
+## Database
+
+<!-- Customize: DELETE this section if the project has no database. -->
+
+- One shared dev DB; the one-schema-branch-at-a-time rule and who may apply it live in
+  `AGENTS.md` — that section is the law, this is the recap.
+- <!-- Customize: keep this line only where ADOPT.md's schema-lock check is installed. -->
+  A red `check:schema-lock` means another in-flight branch holds the schema. Your
+  override: `ALLOW_SCHEMA_CONFLICT=1 {{PKG_MANAGER}} run check:schema-lock` — whoever
+  lands second owns reconciling the schema by hand, forward only. Agents never use it;
+  they ask you who goes first.
+- Rebuild the dev DB from schema when it's wedged: _(add the command)_ — destructive to dev
+  data, which is disposable by design.
+- After a schema PR merges: rebuild the dev DB from the default branch before the next schema
+  task starts.
+
+## Dependency cooldowns (supply chain)
+
+<!-- Customize: add the local half (your package manager's minimum-release-age setting) once you enable it. -->
+
+Nothing may enter this repo until its release has been public for a few days. Nearly every
+malicious npm release is caught and pulled within 24–72h, so the wait skips that window.
+The policy is **3 days for minor/patch, 14 days for majors**, and it belongs in two places
+because neither half can do the other's job:
+
+| Layer                     | Where                    | What it gates                                   |
+| ------------------------- | ------------------------ | ----------------------------------------------- |
+| Dependabot `cooldown:`    | `.github/dependabot.yml` | when a bump PR is even **opened** (server-side) |
+| Package-manager min-age   | your package manager     | what **any local install** may resolve to       |
+
+- **Security updates bypass the Dependabot cooldown by design** — a known-exploited CVE
+  outranks a fresh-release risk. Confirm they're on: repo **Settings → Advanced Security →
+  Dependabot security updates**. Only you can see or toggle that checkbox; no PR can.
+- A local min-age setting gates the **lockfile too, not just fresh resolution**: pnpm
+  verifies lockfile entries on every install, `--frozen-lockfile` included, so CI goes red
+  while ANY entry — a transitive somebody's bump dragged in included — is younger than the
+  cutoff. That red is the quarantine working: wait the window out, or use the exclude
+  below. Never `trustLockfile: true` — it "fixes" this by turning off the supply-chain
+  verification pass itself, the protection the cooldown exists to add.
+- If you need a package published today, add that exact version to your package manager's
+  exclude list, install, then drop the line in the same PR — with a comment naming the CVE.
+  An exclude with no removal date in its comment is a bug.
+
+## CI shape (what runs, and what it bills)
+
+<!-- Customize: the timings and the job list, once you've watched a few real runs. -->
+
+- Three workflows, one job each: **CI** (`checks` — type-check, lint, build, tests), **PR
+  hygiene** (body + title greps) and **Security** (gitleaks). Build is a STEP inside `checks`,
+  not a job of its own: GitHub bills per job rounded up to the minute, so a second runner
+  costs ~2 billed minutes for ~40s of work.
+- **A doc-only PR runs no real CI, on purpose.** `ci.yml` ignores `docs/**`, `**.md`
+  (anywhere, root included) and the agent-config directories; `ci-docs.yml` — its no-op
+  twin — reports the green `checks` for exactly those PRs, so a required status check
+  never hangs on them. Expected and mergeable.
+- **Security runs on PRs only**, not on default-branch pushes: a squash commit is built from
+  commits gitleaks already scanned, and direct pushes are blocked by the pre-push hook.
+- Every job carries `timeout-minutes`. GitHub's default is 360 — one hung test would burn a
+  large slice of a monthly quota in a single incident.
+
+## Merging (your ritual)
+
+<!-- Customize: nothing — these two rules ARE the branch protection until you buy the real thing. -->
+
+- You are the only merger; squash only. The two hard rules (never merge while "Update branch"
+  is visible; never merge without green CI on the PR's LATEST commit) are in `AGENTS.md`
+  "Getting to master".
+- Independent review before merging substantive PRs: a FRESH agent session runs
+  `/review <n>` — cross-family review is deliberate. Wait for `VERDICT: approve`,
+  **posted as a comment on the PR**. A reviewer that reports a verdict only in its own chat
+  window has left you nothing to merge against; if that happens, ask it to post the comment
+  before you merge.
+- Where `.agents/auto-review.sh` is installed, `/ship` starts that reviewer for you — on
+  the PR's creation and on every fix push — so your part is only reading the verdict
+  comments. A **blocker** verdict additionally reaches the author's own task workspace on
+  three channels: the workspace flips to the `needs-attention` sidebar lane and gets a
+  checklist item ("PR #N: fix review blockers, then /ship") — both of which survive a
+  closed session — and a live session there receives "fix the blockers, then /ship" as a
+  user message, so expect it to start working on the fixes before you have read anything.
+  An **approve** messages nobody, since what follows it (your hand-test, your merge) is
+  yours. Expect ONE question EVER, not one per PR: the very first review in this
+  repository opens with a folder-trust prompt in its `review #<pr>` workspace, because
+  the reviewer CLI trusts directories and all reviews share one worktree. Answer it once
+  and every later review runs unattended. **A prompt on the second PR is a
+  misconfiguration to fix, not a habit to acquire** — the permission allowlist, the
+  file grants or the launch flags; the reviewer's page (`templates/agy/README.md` for
+  agy) says which. Reviews also serialise, since they share that worktree: a second PR's
+  workspace opens straight away and waits, with `auto-review` reading "queued behind #N".
+  The same state machine is mirrored into the **cmux sidebar**, which is the surface
+  you are actually looking at while you work _(delete this paragraph if this machine has
+  no cmux)_. The `review #<pr>` workspace carries a pill for wherever the review has got
+  to — 🕘 `Queued behind #M`, ⚙️ `Preparing…`, 👁 `Reviewing · PR #N`, 🔔 `Waiting for
+  you`, ✅ `Approved`, ⛔️ `Blocker — see the comment`, ❌ `Failed — run /review N` — and
+  the two that need you (`Waiting for you`, `Failed`) also put it in the
+  `needs-attention` lane and fire a notification. **`Waiting for you` is the one to act
+  on**: it means the reviewer's terminal has not changed for three minutes, which from
+  outside is what an unanswered permission prompt looks like. Switch to that workspace and
+  answer it; the pill goes back to `Reviewing` on its own once the screen moves again.
+  An approved review **stays open** behind its green pill — nothing auto-closes it, so
+  the transcript is still there to read, and closing it is your call.
+  Meanwhile your own task workspace stops saying "Needs input" about a minute after
+  `/ship` — the work is done and under review, not waiting on you — and says
+  👁 `In review · PR #N` instead, then ✅ `Approved · PR #N — merge when ready` or
+  ⛔️ `Blocker · PR #N` when the verdict lands. That swap happens once per `/ship`: if you
+  resume the session yourself, its normal "Needs input" comes back and stays.
+  The launcher also reports its lifecycle as an **`auto-review` status** in the PR's
+  checks list: pending = reviewer running right now, green = verdict comment posted,
+  red = the review ended without one (the log below says why). Past an hour with no
+  verdict, pending starts naming the age — "no verdict after 90 min — the reviewer's
+  screen is still moving; it is working, not stuck" — because a bare `pending` gets read
+  as "nearly done". It says the opposite ("the reviewer is waiting on you") when the
+  stall watch above has caught it, and falls back to the old "may be waiting on a prompt"
+  hedge only where it could not read the terminal at all. Past twelve hours it goes red
+  as abandoned. A green `auto-review` is
+  NOT an approval — it only means the verdict landed; the verdict itself can be a blocker.
+  Run `/review <n>` by hand when the auto-run never landed a comment, or when you want a
+  second opinion from a different tool.
+- The comment's first line is `Reviewed-by: <tool / model family>, head <sha>`, and it is
+  the only part you have to read. Two things must be true in it: the family is not the
+  author's, and the sha is the PR's latest commit. Either one wrong means the approval on
+  screen is not the approval you think you have.
+
+## Emergency overrides (yours alone — agents may never use them)
+
+<!-- Customize: nothing. If an agent ever uses one of these, that is an AGENTS.md "Never" entry. -->
+
+- `ALLOW_DIRECT_PUSH=1 git push …` — direct push to the default branch, past the pre-push hook.
+  This clears the LOCAL hook only. If the branch ruleset (the playbook's SETUP.md §2)
+  is configured, GitHub still refuses the push — temporarily switch the ruleset to
+  Disabled (Settings → Rules → Rulesets, or
+  `gh api -X PUT repos/{owner}/{repo}/rulesets/<id> -f enforcement=disabled`), push,
+  then switch it back to Active IMMEDIATELY: while it is disabled, nothing protects
+  the branch.
+- `SKIP_PUSH_GATE=1 git push …` — skip the local static gate.
+
+## When something looks broken
+
+<!-- Customize: add a row every time you had to figure something out twice. -->
+
+| Symptom                        | First move                                                                          |
+| ------------------------------ | ----------------------------------------------------------------------------------- |
+| A doc-only PR's `checks` is instant | That's `ci-docs.yml`, the no-op twin — `ci.yml` skips `docs/**` and `**.md` by design |
+| CI red on `gitleaks`           | Treat as a real leak until proven otherwise; if real: rotate the credential FIRST     |
+| CI red on the build step       | The author fixes it, never you — it fails before the test step, so it fails cheap     |
+| PR hygiene red                 | The body is missing its issue link or its `## Docs` answer — the author writes both   |
+| No verdict comment after `/ship` | Look at the `review #<pr>` workspace's pill first — `Waiting for you` means answer the prompt there, `Failed` means run `/review <n>` yourself. The PR's `auto-review` status says the same: pending = still running (past an hour it names the age and whether the terminal is still moving); red = ended without posting; missing = never launched. Detail: `.git/auto-review-<pr>.log` in the author's working copy |
+| A shipped workspace still says "Needs input" | The pill swap needs about a minute, and it happens once per `/ship` — if you typed into that session after shipping, its real "Needs input" is back and correct. A workspace that never swaps means the launcher could not match it to the PR's branch; `.git/auto-review-<pr>.log` says "author workspace: unresolved" |

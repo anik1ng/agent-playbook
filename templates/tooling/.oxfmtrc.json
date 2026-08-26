@@ -1,0 +1,22 @@
+{
+  "$schema": "./node_modules/oxfmt/configuration_schema.json",
+  "printWidth": 100,
+  "ignorePatterns": [
+    ".agents/**",
+    ".claude/**",
+    ".githooks/**",
+    ".github/**",
+    "scripts/start-task.mts",
+    "scripts/finish-task.mts",
+    "scripts/gc-worktrees.mts",
+    "scripts/setup-worktree.mts",
+    "scripts/teardown-worktree.mts",
+    "scripts/task-utils.mts",
+    "scripts/task-utils.test.ts",
+    "scripts/worktree-utils.mts",
+    "scripts/worktree-utils.test.ts",
+    "scripts/schema-lock.mts",
+    "scripts/check-schema-lock.mts",
+    "scripts/schema-lock.test.ts"
+  ]
+}

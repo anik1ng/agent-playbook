@@ -1,0 +1,71 @@
+# Deliberately NOT "CI". The workflow name is display-only — it names the entry in the
+# Actions sidebar and nothing else: a ruleset's required check matches on the JOB name
+# below, which stays byte-identical to ci.yml's. When both files were called `CI`, the
+# sidebar listed two indistinguishable "CI" workflows and the ruleset's check picker
+# offered the same row twice, which reads as a misconfiguration and cost a real
+# debugging round. Renaming this file is safe; renaming the job is not.
+name: CI (docs twin)
+
+# The no-op twin of ci.yml, and the reason `checks (…)` can be a REQUIRED status check.
+#
+# ci.yml skips doc-only PRs via `paths-ignore`. A workflow skipped by a path filter
+# reports NOTHING — not "success", not "skipped", nothing at all — and a required check
+# that never reports holds Merge forever. So a doc-only PR would hang. This twin runs on
+# exactly the paths ci.yml ignores and reports success under the SAME job name, which is
+# GitHub's documented pattern for skipped-but-required checks.
+#
+# Three invariants. Only this comment enforces them:
+#
+#   1. The `paths:` list below is the exact inverse of ci.yml's `pull_request`
+#      `paths-ignore:` — same entries, verbatim, entry for entry. Drift opens a PR class
+#      that triggers NEITHER workflow and then hangs on the required check.
+#   2. The job `name:` is byte-identical to the `checks` job in ci.yml (adoption edits
+#      that name when it deletes steps — mirror it here). It is the string the ruleset
+#      matches on; a rename in either file silently detaches the lock.
+#   3. The `concurrency` group is deliberately NOT ci.yml's (`ci-${{ github.ref }}`).
+#      Sharing it would make the two cancel each other on a mixed (code + docs) PR, and
+#      a cancelled run reports neither success nor failure — the required check hangs
+#      again.
+#
+# `push` is absent on purpose: required status checks are evaluated on pull requests, so
+# the twin has nothing to do on a default-branch push, and a second no-op run per merge
+# is billed time for zero coverage.
+#
+# Accepted edge, worth knowing rather than hiding: on a PR touching BOTH docs and code,
+# both workflows run and both report this same check name. The real one takes minutes
+# and the twin seconds, so the real result lands last and wins — that ordering is
+# overwhelmingly likely, not guaranteed by GitHub. A mixed PR that goes green in seconds
+# is therefore worth one click before merging (docs/RUNBOOK.md "When something looks
+# broken").
+
+on:
+  pull_request:
+    paths:
+      # Verbatim inverse of ci.yml's paths-ignore, including the "**.md" form —
+      # GitHub's root-inclusive pattern, so root-level AGENTS.md / README.md edits
+      # land here rather than in neither workflow.
+      - "docs/**"
+      - "**.md"
+      - ".claude/**"
+
+concurrency:
+  group: ci-docs-${{ github.ref }}
+  cancel-in-progress: true
+
+# The job reads nothing and writes nothing. (Reporting the check is Actions' own doing,
+# not the job token's, so an empty grant costs nothing.)
+permissions: {}
+
+jobs:
+  checks:
+    # Byte-identical to ci.yml's `checks` job name — invariant 2 above.
+    name: checks (format, type-check, lint, knip, build, test)
+    runs-on: ubuntu-latest
+    # Insurance only: this job cannot take longer than the runner takes to boot.
+    timeout-minutes: 5
+    steps:
+      - run: |
+          echo "Doc-only change: every path in this PR is one ci.yml ignores, so the"
+          echo "real checks job did not run. Nothing it checks reads prose — the gate"
+          echo "scripts, the build and the tests all read code. This run exists so the"
+          echo "required check reports."
