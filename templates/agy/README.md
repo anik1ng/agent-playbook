@@ -92,7 +92,12 @@ verdict itself), the gate commands from AGENTS.md and the repo's own test runner
 (`go test`, `pnpm test`, …), `rm -rf tmp` (scratch cleanup — matching stops at word
 boundaries, so `rm -f tmp/` does NOT cover `rm -f tmp/a.txt` [seen live]: the protocol
 deletes the whole scratch directory with this one exact command instead), `mkdir -p tmp`,
-`sh -n`, `echo`, `pwd`, `rg`, `ls`, `wc`, `cat`, `head`. Two shapes NO rule can cover,
+`sh -n`, `echo`, `pwd`, `rg`, `ls`, `wc`, `cat`, `head`, `tail` — and the read-only
+diagnostics a session reaches for when its environment misbehaves, so a broken launcher
+degrades into a handful of prompts instead of a stall: `grep`, `env`, `printenv`,
+`type`, `which`, `git --version`, `git --exec-path`, `gh version`, `gh --version`.
+(A pipe is checked per part like a `&&` chain — `env | grep GIT` needs BOTH `env` and
+`grep` seeded, which is how `rg`-only lists still prompt.) Two shapes NO rule can cover,
 so the protocol avoids them: a multi-line command (each heredoc line is checked as a
 command of its own — write files with the editing tool), and a delete that lists files.
 Deliberately NOT: bare `git branch` (the prefix also
