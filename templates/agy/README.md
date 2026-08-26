@@ -97,9 +97,13 @@ diagnostics a session reaches for when its environment misbehaves, so a broken l
 degrades into a handful of prompts instead of a stall: `grep`, `env`, `printenv`,
 `type`, `which`, `git --version`, `git --exec-path`, `gh version`, `gh --version`.
 (A pipe is checked per part like a `&&` chain — `env | grep GIT` needs BOTH `env` and
-`grep` seeded, which is how `rg`-only lists still prompt.) Two shapes NO rule can cover,
-so the protocol avoids them: a multi-line command (each heredoc line is checked as a
-command of its own — write files with the editing tool), and a delete that lists files.
+`grep` seeded, which is how `rg`-only lists still prompt.) Where the gate builds
+artifacts, seed what handling them takes: `mkdir`, `touch`, and the exact
+`rm -rf <artifact-dir>` the cleanup uses (`rm -rf .next`, …). Three shapes NO rule can
+cover, so the protocol avoids them: a multi-line command (each heredoc line is checked
+as a command of its own — write files with the editing tool), an output redirect
+(`cmd > file` defeats the rule that covers `cmd` [seen live, three commands] — read
+output directly), and a delete that lists files.
 Deliberately NOT: bare `git branch` (the prefix also
 matches `-D`), `git worktree` (…`remove`), `gh api` (POST hides behind the prefix),
 `node` or any arbitrary-code runner — and no stream editor (`sed -i`, `perl -i`):

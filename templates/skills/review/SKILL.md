@@ -26,11 +26,15 @@ Rules of engagement:
   tree is the whole toolkit. Before executing anything, confirm `git status` is clean
   and HEAD matches the PR's head SHA (`gh pr view <pr> --json headRefOid`); if
   either check fails, review from `gh pr diff` alone and say so in the verdict.
-- Every scratch file you create — a saved `gh pr diff`, notes, probe output — lives
-  INSIDE the working copy (the gitignored `tmp/` where the repo has one), never the
-  system `/tmp` or `$HOME`. An auto-launched reviewer's file grants end at its own
-  worktree: one write outside it stalls the whole review on a permission prompt, with
-  nobody guaranteed to be watching; the same path inside the tree costs nothing.
+- Every scratch file you create — notes, probe output — lives INSIDE the working copy
+  (the gitignored `tmp/` where the repo has one), never the system `/tmp` or `$HOME`.
+  An auto-launched reviewer's file grants end at its own worktree: one write outside it
+  stalls the whole review on a permission prompt, with nobody guaranteed to be watching;
+  the same path inside the tree costs nothing. Read command output directly instead of
+  saving it: `gh pr diff <pr> > tmp/diff.patch` stalls on a prompt however thoroughly
+  the allowlist is seeded — a redirect defeats the rule that covers the command — while
+  re-running `gh pr diff` costs nothing. When output truly must persist, write it from
+  your context with the file-editing tool.
 - Read the full diff (`gh pr diff <pr>`), the PR body (`gh pr view <pr>`),
   and the issue it implements (`gh issue view <n>`).
 - If your CLI ships a generic diff-review command (Claude Code's `/code-review`), run it
