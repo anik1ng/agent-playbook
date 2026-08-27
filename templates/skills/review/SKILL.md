@@ -43,6 +43,10 @@ Rules of engagement:
     with `export VAR=…` — `export` is unseeded BY DESIGN (an env write rewrites what
     every later seeded command means; a prepended `PATH` turns `git status` into any
     binary on disk), so an `export … && …` line stalls no matter what follows it.
+  - Never nest one command inside another with `$(…)` or backticks — substitution can
+    carry anything, so no allowlist passes a line containing it, however seeded its
+    parts are [seen live: the freshness check]. Run the inner command on its own,
+    read its output, then run the outer command with the literal value pasted in.
   - Read files with the file-reading tool, or `cat` / `head` / `tail` — never `sed`,
     `awk` or `perl`, even read-only: sed's flags reorder freely, so no allowlist
     entry can cover the read form without also covering `sed -n -i …`, a silent
@@ -154,8 +158,9 @@ Checklist, in priority order:
    - Not behind → done.
    - Behind with a merge CONFLICT → blocker: the author rebases and resolves.
    - Behind, no conflict, but the PR's files OVERLAP what the default branch changed
-     since the merge-base (`git diff --name-only $(git merge-base HEAD origin/<default>)
-     origin/<default>` against the PR's file list) → inspect the interaction. This is
+     since the merge-base (two seeded commands — `git merge-base HEAD origin/<default>`,
+     then `git diff --name-only <that-sha> origin/<default>` with the literal sha, never
+     a `$(…)` substitution — against the PR's file list) → inspect the interaction. This is
      the real hazard the check exists for: a stale base can silently reverse a recent
      merge in the squash — a branch cut before a cleanup PR re-adds what that PR
      removed, and `.gitignore` does not stop an already-committed file. Blocker only
