@@ -113,7 +113,10 @@ while the three-word prefix cannot launch any other package (bare `npx` stays ou
 below), `rm -rf tmp` (scratch cleanup — matching stops at word
 boundaries, so `rm -f tmp/` does NOT cover `rm -f tmp/a.txt` [seen live]: the protocol
 deletes the whole scratch directory with this one exact command instead), `mkdir -p tmp`,
-`sh -n`, `echo`, `pwd`, `rg`, `ls`, `wc`, `cat`, `head`, `tail` — and the read-only
+`sh -n`, `sh tmp/probe.sh` (the ONE seeded way to run a shell-script probe — the skill
+pins the harness to that exact path because a bare `sh` entry would run any script
+anywhere on disk [seen live: a guard-script review stalled on `sh tmp/test.sh`]),
+`echo`, `pwd`, `rg`, `ls`, `wc`, `cat`, `head`, `tail` — and the read-only
 diagnostics a session reaches for when its environment misbehaves, so a broken launcher
 degrades into a handful of prompts instead of a stall: `grep`, `env`, `printenv`,
 `type`, `which`, `git --version`, `git --exec-path`, `gh version`, `gh --version`.

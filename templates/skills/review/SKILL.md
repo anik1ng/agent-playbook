@@ -51,6 +51,11 @@ Rules of engagement:
     names, its test runner, and the targeted single-file form where the list carries
     one (`npx vitest run <file>` in a vitest repo). Bare `node`, or `npx` launching
     anything else, is an arbitrary-code runner the list deliberately excludes.
+  - A SHELL-script diff (a hook, a launcher) is the one case whose probe harness is
+    itself a shell script. Write it at exactly `tmp/probe.sh` and run it as exactly
+    `sh tmp/probe.sh` — that one literal command is seedable and seeded, the way
+    `rm -rf tmp` is; any other name or path stalls, because a bare `sh` entry would
+    run any script anywhere on disk.
   - Never start services or containers (`docker run`, a database, a dev server), and
     never hand-assemble an environment a suite reports missing. A suite that SKIPS
     locally without its infrastructure (a missing `TEST_DATABASE_URL`) skips by
