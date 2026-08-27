@@ -6,7 +6,7 @@
         "hooks": [
           {
             "type": "command",
-            "command": "./guard-reviewer.sh",
+            "command": "sh ./guard-reviewer.sh",
             "timeout": 10
           }
         ]
