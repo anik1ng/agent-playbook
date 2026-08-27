@@ -1,8 +1,23 @@
 #!/bin/sh
 # PreToolUse guard for agy (Antigravity) sessions in this repo, wired via
-# .agents/hooks.json. The reviewer is report-only, so the three commands that
-# would let it ACT on the PR — `git push`, `gh pr merge`, `gh pr close` — are
-# denied at the tool layer, independently of whatever the launcher passes.
+# .agents/hooks.json. Two tiers of deny, one shared mechanic.
+#
+# TIER 1 — report-only. The three commands that would let the reviewer ACT on
+# the PR — `git push`, `gh pr merge`, `gh pr close` — are denied at the tool
+# layer, independently of whatever the launcher passes.
+#
+# TIER 2 — protocol enforcement. The command shapes the review skill forbids
+# (SKILL.md "command discipline") are denied HERE, with the skill's reason in
+# the denial, instead of falling through to an "ask" the human cannot judge.
+# This exists because the human behind the prompt cannot evaluate a command
+# without reading the code under review — which this pipeline is built to
+# avoid — so an "ask" for an off-protocol command has only bad outcomes: a
+# rubber-stamped yes (executes junk), or a bare no (stalls the session with
+# no reason to act on). A deny that CARRIES the reason is the one answer that
+# needs no human and keeps the session moving: the model reads why and takes
+# the sanctioned path (cat instead of sed, a probe file instead of node -e,
+# CI's check instead of a hand-started database). Every rule below maps to a
+# live stall from a real auto-review run.
 #
 # This is ADOPT.md's SECOND boundary. The first is the CLI's own permission
 # config; this one survives the first being misconfigured: verified on agy
@@ -13,7 +28,7 @@
 # Contract (agy's hooks.md): stdin carries the tool call as JSON; stdout must
 # return a decision. Non-matching commands answer {"decision":"ask"} — agy's
 # normal permission flow, NOT an auto-allow. An empty object {} is treated as a
-# denial rather than as abstention, which is why the else branch is explicit.
+# denial rather than as abstention, which is why the fallthrough is explicit.
 #
 # This is a TRIPWIRE, not a sandbox: a regex over the rendered command string
 # stops the reviewer from running these commands in the way it plausibly would,
@@ -21,6 +36,12 @@
 # shells out). The boundary against an adversarially-steered reviewer is the
 # sandbox flag the launcher passes. A positive allowlist is not viable here
 # because the review protocol requires running arbitrary probe tests.
+# Tier-2 corollary: the payload can carry prose (context, the model's own
+# reasoning) alongside the command, so a rule may occasionally deny a
+# legitimate line whose prose QUOTES a forbidden shape. That failure is
+# self-healing — the model rewords and retries — and it is the accepted price
+# for the prompts these rules retire; a rule that misfires persistently gets
+# narrowed, not the tier removed.
 #
 # The `gh api` pattern covers the REST routes behind the two `gh pr` commands
 # (`…/pulls/N/merge`, and `-f state=closed` for a close).
@@ -56,8 +77,48 @@
 
 payload=$(cat)
 
-if printf '%s' "$payload" | grep -qE '(^|["'"'"'`&|;({]|\\n)[[:space:]]*(git([[:space:]]+-[^[:space:]]+([[:space:]]+[^[:space:]-][^[:space:]]*)?)*[[:space:]]+push|gh[[:space:]]+pr[[:space:]]+(merge|close)|gh[[:space:]]+api[^|;&]*(merge|state=closed))'; then
-  printf '{"decision":"deny","reason":"Reviewer sessions are report-only: git push / gh pr merge / gh pr close are blocked by .agents/hooks.json (AGENTS.md, Reviewer protocol)."}'
-else
-  printf '{"decision":"ask"}'
+# A command position: start of payload, a quote/backtick, a shell operator, or
+# an escaped newline inside the JSON string — optional whitespace after it.
+A='(^|["'"'"'`&|;({]|\\n)[[:space:]]*'
+
+hit() { printf '%s' "$payload" | grep -qE "$1"; }
+deny() { printf '{"decision":"deny","reason":"%s"}' "$1"; exit 0; }
+
+# --- Tier 1: report-only (unchanged) ---------------------------------------
+if hit "$A(git([[:space:]]+-[^[:space:]]+([[:space:]]+[^[:space:]-][^[:space:]]*)?)*[[:space:]]+push|gh[[:space:]]+pr[[:space:]]+(merge|close)|gh[[:space:]]+api[^|;&]*(merge|state=closed))"; then
+  deny "Reviewer sessions are report-only: git push / gh pr merge / gh pr close are blocked by .agents/hooks.json (AGENTS.md, Reviewer protocol)."
 fi
+
+# --- Tier 2: protocol enforcement (SKILL.md command discipline) ------------
+# Stream editors, even read-only: sed's flags reorder freely, so no allowlist
+# entry can cover the read form without also covering an in-place write.
+if hit "$A(sed|awk|perl)[[:space:]]"; then
+  deny "Off-protocol: stream editors are unseedable. Read files with cat/head/tail or the file-reading tool; edit only with the file-editing tool (review SKILL.md, command discipline)."
+fi
+
+# export prefixes: an env write rewrites what every later seeded command means.
+if hit "${A}export[[:space:]]+[A-Za-z_][A-Za-z0-9_]*="; then
+  deny "Off-protocol: never set env vars in shell commands. A suite that skips without its env skips by design - CI owns that suite; read its check on the PR (review SKILL.md, command discipline)."
+fi
+
+# Services and containers: the reviewer never starts infrastructure.
+if hit "${A}docker[[:space:]]"; then
+  deny "Off-protocol: never start services or containers. CI owns integration infrastructure - read its check on the PR instead of rebuilding the environment (review SKILL.md, command discipline)."
+fi
+
+# Inline eval: arbitrary code outside the repo's own test layout.
+if hit "${A}node[[:space:]]+(-e|--eval)([[:space:]]|['\"])"; then
+  deny "Off-protocol: no inline eval. Write a throwaway probe test with the file-editing tool and run it through the repo's seeded test runner (review SKILL.md, command discipline)."
+fi
+
+# Bare npx: an arbitrary-code runner. The one seeded form is `npx vitest run`.
+if hit "${A}npx[[:space:]]" && ! hit "${A}npx[[:space:]]+vitest[[:space:]]+run"; then
+  deny "Off-protocol: bare npx is an arbitrary-code runner. Use the repo's own scripts; the one seeded npx form is 'npx vitest run <file>' (review SKILL.md, command discipline)."
+fi
+
+# gh output redirected to a file: a redirect defeats allowlist matching.
+if hit "${A}gh[[:space:]][^|;&<>]*>{1,2}[[:space:]]*[A-Za-z0-9_./~-]"; then
+  deny "Off-protocol: never redirect output to a file - a redirect defeats the allowlist rule that covers the command. Re-run without '> file' and read the output directly (review SKILL.md, command discipline)."
+fi
+
+printf '{"decision":"ask"}'

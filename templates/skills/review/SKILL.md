@@ -35,6 +35,27 @@ Rules of engagement:
   the allowlist is seeded — a redirect defeats the rule that covers the command — while
   re-running `gh pr diff` costs nothing. When output truly must persist, write it from
   your context with the file-editing tool.
+- The shell is allowlist-gated: every command outside the seeded shapes stalls the review
+  on a permission prompt nobody is guaranteed to answer. Stay inside them — each rule
+  here was bought by a live stall:
+  - One command per invocation, from the seeded set. A `&&` chain is checked part by
+    part, so a single unseeded segment stalls the whole line. Never prefix a command
+    with `export VAR=…` — `export` is unseeded BY DESIGN (an env write rewrites what
+    every later seeded command means; a prepended `PATH` turns `git status` into any
+    binary on disk), so an `export … && …` line stalls no matter what follows it.
+  - Read files with the file-reading tool, or `cat` / `head` / `tail` — never `sed`,
+    `awk` or `perl`, even read-only: sed's flags reorder freely, so no allowlist
+    entry can cover the read form without also covering `sed -n -i …`, a silent
+    write to any file on disk. `sed` stays unseeded and every use stalls.
+  - Run tests through the repo's own seeded scripts — the gate commands `AGENTS.md`
+    names, its test runner, and the targeted single-file form where the list carries
+    one (`npx vitest run <file>` in a vitest repo). Bare `node`, or `npx` launching
+    anything else, is an arbitrary-code runner the list deliberately excludes.
+  - Never start services or containers (`docker run`, a database, a dev server), and
+    never hand-assemble an environment a suite reports missing. A suite that SKIPS
+    locally without its infrastructure (a missing `TEST_DATABASE_URL`) skips by
+    design: CI owns it — read that check's result on the PR instead of rebuilding
+    the environment locally.
 - Read the full diff (`gh pr diff <pr>`), the PR body (`gh pr view <pr>`),
   and the issue it implements (`gh issue view <n>`).
 - If your CLI ships a generic diff-review command (Claude Code's `/code-review`), run it
