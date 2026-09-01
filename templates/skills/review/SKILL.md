@@ -64,7 +64,9 @@ Rules of engagement:
     never hand-assemble an environment a suite reports missing. A suite that SKIPS
     locally without its infrastructure (a missing `TEST_DATABASE_URL`) skips by
     design: CI owns it — read that check's result on the PR instead of rebuilding
-    the environment locally.
+    the environment locally. Reading a check IS in the toolkit: `gh pr checks <pr>`
+    for the roster, `gh run view --job=<job-id> --log` for a failing job's log —
+    piped to `tail`/`grep` when long, never redirected to a file.
 - Read the full diff (`gh pr diff <pr>`), the PR body (`gh pr view <pr>`),
   and the issue it implements (`gh issue view <n>`).
 - If your CLI ships a generic diff-review command (Claude Code's `/code-review`), run it
@@ -125,7 +127,10 @@ Checklist, in priority order:
    platform behavior as a blocker (AGENTS.md "Specs and plans" defines the labels).
    A diff touching error handling, ordering, or concurrency gets the full battery:
    - Write throwaway probe tests against the PR head, in the repo's own test layout and
-     under a gitignored path (AGENTS.md names one where the repo has it). Probe the happy
+     under a gitignored path (AGENTS.md names one where the repo has it), and create
+     each probe at its FINAL name — `tmp/probe.test.ts` where vitest is the runner,
+     because only `*.test.*` files run: a rename afterwards is `mv`, which is
+     unseedable and auto-denied [seen live]. Probe the happy
      path with no fault injected, each transient-vs-hard variant, and each precedence
      pairing. DELETE the probes when done — leftovers would run in the author's next test
      run.

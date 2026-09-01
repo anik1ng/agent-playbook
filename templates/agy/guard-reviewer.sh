@@ -101,6 +101,21 @@ if hit "${A}export[[:space:]]+[A-Za-z_][A-Za-z0-9_]*="; then
   deny "Off-protocol: never set env vars in shell commands. A suite that skips without its env skips by design - CI owns that suite; read its check on the PR (review SKILL.md, command discipline)."
 fi
 
+# Capturing command output into a variable: `x=$(cmd) && …` is the substitution
+# the skill forbids, wearing an assignment - no allowlist can pass it, so it
+# reached the human as an unjudgeable ask (a live stall in a synced repo).
+if hit "${A}[A-Za-z_][A-Za-z0-9_]*=[\"']?[\$][(]"; then
+  deny "Off-protocol: never capture command output into a variable - substitution is unseedable. Run the inner command on its own, read its output, then re-run with the literal value pasted in (review SKILL.md, command discipline)."
+fi
+
+# mv: command rules carry no path scope, so a seeded mv could rename or
+# overwrite any file on disk. The protocol has no use for it - files are
+# created at their final name with the editing tool (a probe renamed to
+# *.test.ts was the live stall).
+if hit "${A}mv[[:space:]]"; then
+  deny "Off-protocol: mv is unseedable - no path scope, it could overwrite any file on disk. Create the file at its final name with the file-editing tool instead (review SKILL.md, command discipline)."
+fi
+
 # Services and containers: the reviewer never starts infrastructure.
 if hit "${A}docker[[:space:]]"; then
   deny "Off-protocol: never start services or containers. CI owns integration infrastructure - read its check on the PR instead of rebuilding the environment (review SKILL.md, command discipline)."

@@ -54,8 +54,9 @@ Copy both files as they are — no placeholders, nothing repo-specific:
 
 Two tiers, one mechanic. Tier 1 denies `git push`, `gh pr merge`, `gh pr close` and
 the `gh api` routes behind them — the reviewer is report-only. Tier 2 denies the
-command shapes the review skill forbids (stream editors, `export` prefixes, docker,
-inline eval, bare `npx`, `gh … > file` redirects), each with a one-line reason naming
+command shapes the review skill forbids (stream editors, `export` prefixes, `x=$(…)`
+output captures, `mv`, docker, inline eval, bare `npx`, `gh … > file` redirects), each
+with a one-line reason naming
 the sanctioned alternative — because an "ask" for an off-protocol command reaches a
 human who cannot judge it without reading the code under review, which this pipeline
 is built to avoid. A deny that carries the reason needs no human and the session
@@ -102,7 +103,11 @@ review. Seed both forms for the shapes a review needs (read-heavy, plus the few 
 writes the protocol itself orders — verified against a live review, agy 1.1.20):
 `git status|diff|log|show|rev-parse|rev-list|merge-base|ls-files|blame`,
 `git branch --list`, `git worktree list`, `git checkout` (reverting mutations),
-`git fetch`, `cd`, `gh pr view|diff|list|checks`, `gh issue view`, `gh pr comment` (the
+`git fetch`, `cd`, `gh pr view|diff|list|checks`, `gh run view` (the only reader of a red
+check's LOG: `gh pr checks` names the failing job and shows not one line of it, and a
+reviewer chasing a security or CI finding reads the log itself —
+`gh run view --job=<id> --log`, piped through the seeded `tail`/`grep`
+[seen live: two stalls on exactly that]), `gh issue view`, `gh pr comment` (the
 verdict itself), the gate commands from AGENTS.md and the repo's own test runner
 (`go test`, `pnpm test`, …) — including every per-language gate delegator the root
 manifest exposes (`npm run go:test`, `npm run go:vet`, …: a reviewer legitimately
@@ -129,7 +134,9 @@ as a command of its own — write files with the editing tool), an output redire
 (`cmd > file` defeats the rule that covers `cmd` [seen live, three commands] — read
 output directly), and a delete that lists files.
 Deliberately NOT: bare `git branch` (the prefix also
-matches `-D`), `git worktree` (…`remove`), `gh api` (POST hides behind the prefix),
+matches `-D`), `git worktree` (…`remove`), `gh api` (POST hides behind the prefix), bare `gh run`
+(…`rerun`, `cancel`, `delete` hide behind it — the `view` form alone is seeded) or
+`gh run download` (writes artifacts to any path on disk),
 `node`, bare `npx` or any arbitrary-code runner; `export` (an env write rewrites what
 every later seeded command means — a prepended `PATH` turns a seeded `git status` into
 any binary on disk, so the entry would silently widen every other rule in the list);
