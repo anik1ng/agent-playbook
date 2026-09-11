@@ -93,7 +93,11 @@ Checklist, in priority order:
    still shows up as a changed test file, but a deleted workflow does not go red — it stops
    existing, and its check quietly disappears from the PR's list of checks.
    Check rather than assume whether required status checks back you up:
-   `gh api repos/{owner}/{repo}/rulesets`. If an active ruleset requires this repo's
+   `gh ruleset check <default>` — a read-only, seeded command; never `gh api`, which is
+   unseedable because POST hides behind the prefix [seen live: the `gh api … /rulesets`
+   form stalled every review that reached this item]. Run it only when the diff touches
+   one of the gate files above: a diff that does not has no gate to weaken, and the
+   check is a prompt for nothing. If an active ruleset requires this repo's
    check contexts, a deleted workflow blocks the merge server-side; if not, you are
    the only reader that can notice. Either way, the weakening itself is yours to catch.
    The reflexive case counts too: a PR editing this checklist is editing the rules you are

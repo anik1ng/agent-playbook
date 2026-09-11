@@ -118,7 +118,10 @@ writes the protocol itself orders — verified against a live review, agy 1.1.20
 `git status|diff|log|show|rev-parse|rev-list|merge-base|ls-files|blame`,
 `git branch --list`, `git worktree list`, `git checkout` (reverting mutations),
 `git fetch`, `cd`, `gh pr view|diff|list|checks`, `gh issue view`, `gh pr comment` (the
-verdict itself), the gate commands from AGENTS.md and the repo's own test runner
+verdict itself), `gh ruleset check|list` (the gate-integrity item's ruleset read — it
+used to prescribe `gh api … /rulesets`, and `gh api` is unseeded below on purpose, so
+that one line stalled every review that reached it [seen live]), the gate commands from
+AGENTS.md and the repo's own test runner
 (`go test`, `pnpm test`, …) — including every per-language gate delegator the root
 manifest exposes (`npm run go:test`, `npm run go:vet`, …: a reviewer legitimately
 re-runs one half of a two-language gate, and the un-seeded half prompts [seen live]) —
