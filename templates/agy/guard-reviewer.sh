@@ -119,8 +119,8 @@ fi
 # skill's own wording, once as `BASE_SHA=$(…) && …` after the skill was fixed).
 # Matched anywhere in the payload, not at a command position: the substitution
 # sits mid-line by nature, and a stray `$(` in prose costs one reworded retry.
-if hit '\\$\\('; then
-  deny "Off-protocol: never nest a command in \\$(...) - substitution can carry anything, so no allowlist rule passes the line. Run the inner command on its own, read its output, then run the outer command with the literal value pasted in (review SKILL.md, command discipline)."
+if hit '\$\('; then
+  deny "Off-protocol: never nest a command in \$(...) - substitution can carry anything, so no allowlist rule passes the line. Run the inner command on its own, read its output, then run the outer command with the literal value pasted in (review SKILL.md, command discipline)."
 fi
 
 # xargs: substitution through a pipe. It runs whatever the previous command

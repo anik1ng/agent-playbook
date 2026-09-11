@@ -68,7 +68,7 @@ defer, never widen. Do not offer these files to a repo whose reviewer is a diffe
 CLI: they are agy's hook format, and nothing else reads them.
 
 The payload the hook reads is JSON from a Go encoder, and Go escapes the HTML-sensitive
-characters: `>` arrives as `\\u003e`, `<` as `\\u003c`, `&` as `\\u0026`. The hooks page
+characters: `>` arrives as `>`, `<` as `<`, `&` as `&`. The hooks page
 does not say so — its example is `npm test` — and it was found by execution on agy
 1.2.1, after the redirect rule had been "in place" for weeks without firing once:
 `gh pr diff N > tmp/diff.patch` prompted the human every time, and `… && git push` would
