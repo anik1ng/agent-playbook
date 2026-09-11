@@ -101,6 +101,17 @@ if hit "${A}export[[:space:]]+[A-Za-z_][A-Za-z0-9_]*="; then
   deny "Off-protocol: never set env vars in shell commands. A suite that skips without its env skips by design - CI owns that suite; read its check on the PR (review SKILL.md, command discipline)."
 fi
 
+# Command substitution: `$(…)` can carry anything, so no allowlist rule passes a
+# line containing it however seeded its parts are — the freshness check
+# `git diff --name-only $(git merge-base …)` stalled a review on a human even
+# with `git diff` and `git merge-base` both seeded (live, twice: once as the
+# skill's own wording, once as `BASE_SHA=$(…) && …` after the skill was fixed).
+# Matched anywhere in the payload, not at a command position: the substitution
+# sits mid-line by nature, and a stray `$(` in prose costs one reworded retry.
+if hit '\$\('; then
+  deny "Off-protocol: never nest a command in \$(...) - substitution can carry anything, so no allowlist rule passes the line. Run the inner command on its own, read its output, then run the outer command with the literal value pasted in (review SKILL.md, command discipline)."
+fi
+
 # Services and containers: the reviewer never starts infrastructure.
 if hit "${A}docker[[:space:]]"; then
   deny "Off-protocol: never start services or containers. CI owns integration infrastructure - read its check on the PR instead of rebuilding the environment (review SKILL.md, command discipline)."

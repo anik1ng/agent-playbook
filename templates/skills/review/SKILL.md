@@ -53,8 +53,9 @@ Rules of engagement:
     write to any file on disk. `sed` stays unseeded and every use stalls.
   - Run tests through the repo's own seeded scripts — the gate commands `AGENTS.md`
     names, its test runner, and the targeted single-file form where the list carries
-    one (`npx vitest run <file>` in a vitest repo). Bare `node`, or `npx` launching
-    anything else, is an arbitrary-code runner the list deliberately excludes.
+    one (`npx vitest run <file>` or `pnpm vitest run <file>` in a vitest repo). Bare
+    `node`, or `npx` launching anything else, is an arbitrary-code runner the list
+    deliberately excludes.
   - A SHELL-script diff (a hook, a launcher) is the one case whose probe harness is
     itself a shell script. Write it at exactly `tmp/probe.sh` and run it as exactly
     `sh tmp/probe.sh` — that one literal command is seedable and seeded, the way

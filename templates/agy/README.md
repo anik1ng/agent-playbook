@@ -54,18 +54,18 @@ Copy both files as they are — no placeholders, nothing repo-specific:
 
 Two tiers, one mechanic. Tier 1 denies `git push`, `gh pr merge`, `gh pr close` and
 the `gh api` routes behind them — the reviewer is report-only. Tier 2 denies the
-command shapes the review skill forbids (stream editors, `export` prefixes, docker,
-inline eval, bare `npx`, `gh … > file` redirects), each with a one-line reason naming
-the sanctioned alternative — because an "ask" for an off-protocol command reaches a
-human who cannot judge it without reading the code under review, which this pipeline
-is built to avoid. A deny that carries the reason needs no human and the session
-self-corrects. Everything else answers `{"decision":"ask"}` — agy's normal permission
-flow, not an auto-allow. Two verified agy 1.1.11 behaviours the design rests on: a
-hook deny fires even under a blanket permission bypass (the layer that survives a
-misconfigured launcher), and a hook answering `{"decision":"allow"}` does NOT grant
-permission — a hook can only deny or defer, never widen. Do not offer these files to
-a repo whose reviewer is a different CLI: they are agy's hook format, and nothing else
-reads them.
+command shapes the review skill forbids (stream editors, `export` prefixes, `$(…)`
+substitution, docker, inline eval, bare `npx`, `gh … > file` redirects), each with a
+one-line reason naming the sanctioned alternative — because an "ask" for an
+off-protocol command reaches a human who cannot judge it without reading the code
+under review, which this pipeline is built to avoid. A deny that carries the reason
+needs no human and the session self-corrects. Everything else answers
+`{"decision":"ask"}` — agy's normal permission flow, not an auto-allow. Two verified
+agy 1.1.11 behaviours the design rests on: a hook deny fires even under a blanket
+permission bypass (the layer that survives a misconfigured launcher), and a hook
+answering `{"decision":"allow"}` does NOT grant permission — a hook can only deny or
+defer, never widen. Do not offer these files to a repo whose reviewer is a different
+CLI: they are agy's hook format, and nothing else reads them.
 
 ## Seeding agy's allowlist — TWO grant forms, not one
 
@@ -107,12 +107,15 @@ verdict itself), the gate commands from AGENTS.md and the repo's own test runner
 (`go test`, `pnpm test`, …) — including every per-language gate delegator the root
 manifest exposes (`npm run go:test`, `npm run go:vet`, …: a reviewer legitimately
 re-runs one half of a two-language gate, and the un-seeded half prompts [seen live]) —
-and, where vitest is the runner, `npx vitest run`: the targeted single-file form the
-probe workflow needs, running the same committed test files `pnpm test` already runs,
-while the three-word prefix cannot launch any other package (bare `npx` stays out
-below), `rm -rf tmp` (scratch cleanup — matching stops at word
-boundaries, so `rm -f tmp/` does NOT cover `rm -f tmp/a.txt` [seen live]: the protocol
-deletes the whole scratch directory with this one exact command instead), `mkdir -p tmp`,
+and, where vitest is the runner, `npx vitest run` AND `pnpm vitest run`: the targeted
+single-file form the probe workflow needs, running the same committed test files
+`pnpm test` already runs, while the three-word prefix cannot launch any other package
+(bare `npx` stays out below). Seed both spellings: in a pnpm repo the reviewer reaches
+for `pnpm vitest run`, and with only the `npx` form seeded that one command prompted
+five times in one review [seen live] — a one-shot "yes" covers one invocation, not the
+shape. `rm -rf tmp` (scratch cleanup — matching stops at word boundaries, so
+`rm -f tmp/` does NOT cover `rm -f tmp/a.txt` [seen live]: the protocol deletes the
+whole scratch directory with this one exact command instead), `mkdir -p tmp`,
 `sh -n`, `sh tmp/probe.sh` (the ONE seeded way to run a shell-script probe — the skill
 pins the harness to that exact path because a bare `sh` entry would run any script
 anywhere on disk [seen live: a guard-script review stalled on `sh tmp/test.sh`]),
