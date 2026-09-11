@@ -55,8 +55,8 @@ Copy both files as they are — no placeholders, nothing repo-specific:
 Two tiers, one mechanic. Tier 1 denies `git push`, `gh pr merge`, `gh pr close` and
 the `gh api` routes behind them — the reviewer is report-only. Tier 2 denies the
 command shapes the review skill forbids (stream editors, `export` prefixes, `$(…)`
-substitution, docker, inline eval, bare `npx`, `gh … > file` redirects), each with a
-one-line reason naming the sanctioned alternative — because an "ask" for an
+substitution, `xargs`, docker, inline eval, bare `npx`, `gh … > file` redirects), each
+with a one-line reason naming the sanctioned alternative — because an "ask" for an
 off-protocol command reaches a human who cannot judge it without reading the code
 under review, which this pipeline is built to avoid. A deny that carries the reason
 needs no human and the session self-corrects. Everything else answers
@@ -66,6 +66,16 @@ permission bypass (the layer that survives a misconfigured launcher), and a hook
 answering `{"decision":"allow"}` does NOT grant permission — a hook can only deny or
 defer, never widen. Do not offer these files to a repo whose reviewer is a different
 CLI: they are agy's hook format, and nothing else reads them.
+
+The payload the hook reads is JSON from a Go encoder, and Go escapes the HTML-sensitive
+characters: `>` arrives as `\\u003e`, `<` as `\\u003c`, `&` as `\\u0026`. The hooks page
+does not say so — its example is `npm test` — and it was found by execution on agy
+1.2.1, after the redirect rule had been "in place" for weeks without firing once:
+`gh pr diff N > tmp/diff.patch` prompted the human every time, and `… && git push` would
+have walked past tier 1. The guard folds the three escapes back before matching. Any new
+pattern that names one of those characters is tested against the ESCAPED form, not the
+shell string — the way to see the real payload is a hook that appends its stdin to a
+file inside the worktree.
 
 ## Seeding agy's allowlist — TWO grant forms, not one
 
@@ -87,8 +97,11 @@ uncommitted work, which is the one tree the reviewer must never touch, and it is
 where the reviewer runs anyway (one adopted repo granted exactly that, so every read inside the
 review worktree asked, and a write to the author's copy would not have).
 
-Rules are prefixes (`git` matches `git add`, not `github`) and come in two
-non-interchangeable forms:
+Rules are prefixes (`git` matches `git add`, not `github`), and agy 1.2.x also
+accepts `command(regex:…)` / `unsandboxed(regex:…)` — a regex rule can name an exact
+shape a prefix cannot, which is the only reason to reach for one; a regex that widens
+is `command(*)` in more characters. The list below stays enumerated prefixes. Rules
+come in two non-interchangeable forms:
 
 | rule             | grants                         | the prompt it silences                        |
 | ---------------- | ------------------------------ | --------------------------------------------- |

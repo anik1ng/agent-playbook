@@ -43,10 +43,11 @@ Rules of engagement:
     with `export VAR=…` — `export` is unseeded BY DESIGN (an env write rewrites what
     every later seeded command means; a prepended `PATH` turns `git status` into any
     binary on disk), so an `export … && …` line stalls no matter what follows it.
-  - Never nest one command inside another with `$(…)` or backticks — substitution can
-    carry anything, so no allowlist passes a line containing it, however seeded its
-    parts are [seen live: the freshness check]. Run the inner command on its own,
-    read its output, then run the outer command with the literal value pasted in.
+  - Never nest one command inside another with `$(…)` or backticks, and never pipe
+    into `xargs` — substitution can carry anything, so no allowlist passes a line
+    containing it, however seeded its parts are [seen live: the freshness check, twice].
+    Run the inner command on its own, read its output, then run the outer command with
+    the literal value pasted in.
   - Read files with the file-reading tool, or `cat` / `head` / `tail` — never `sed`,
     `awk` or `perl`, even read-only: sed's flags reorder freely, so no allowlist
     entry can cover the read form without also covering `sed -n -i …`, a silent

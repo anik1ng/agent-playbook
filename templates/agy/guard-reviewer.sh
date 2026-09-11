@@ -77,6 +77,17 @@
 
 payload=$(cat)
 
+# agy hands the tool call over as JSON written by a Go encoder, and Go spells
+# the HTML-sensitive characters as escapes: `>` arrives as >, `<` as
+# <, `&` as &. Undocumented — the hooks page shows only `npm test` —
+# and seen by execution on agy 1.2.1: `gh pr view N > tmp/x` reached this hook
+# as "CommandLine":"gh pr view N > tmp/x", `echo a && echo b` as
+# "echo a && echo b". Fold them back before matching, or two rules
+# below are blind: the redirect rule never sees its `>`, and `npm test && git
+# push` walks past tier 1 because the `&&` before `git push` is not the
+# operator the command position expects (both live, in one review).
+payload=$(printf '%s' "$payload" | sed -e 's/\\u003[eE]/>/g' -e 's/\\u003[cC]/</g' -e 's/\\u0026/\&/g')
+
 # A command position: start of payload, a quote/backtick, a shell operator, or
 # an escaped newline inside the JSON string — optional whitespace after it.
 A='(^|["'"'"'`&|;({]|\\n)[[:space:]]*'
@@ -108,8 +119,16 @@ fi
 # skill's own wording, once as `BASE_SHA=$(…) && …` after the skill was fixed).
 # Matched anywhere in the payload, not at a command position: the substitution
 # sits mid-line by nature, and a stray `$(` in prose costs one reworded retry.
-if hit '\$\('; then
-  deny "Off-protocol: never nest a command in \$(...) - substitution can carry anything, so no allowlist rule passes the line. Run the inner command on its own, read its output, then run the outer command with the literal value pasted in (review SKILL.md, command discipline)."
+if hit '\\$\\('; then
+  deny "Off-protocol: never nest a command in \\$(...) - substitution can carry anything, so no allowlist rule passes the line. Run the inner command on its own, read its output, then run the outer command with the literal value pasted in (review SKILL.md, command discipline)."
+fi
+
+# xargs: substitution through a pipe. It runs whatever the previous command
+# printed, so the line carries a command no allowlist rule can read — the same
+# shape as `$(…)` (live: `git merge-base HEAD origin/<default> | xargs -I {} git
+# rev-list {}..origin/<default> --count`, a prompt for the human).
+if hit "${A}xargs([[:space:]]|$)"; then
+  deny "Off-protocol: never pipe into xargs - it runs whatever the previous command printed, so the line carries a command no allowlist rule can read. Run the first command on its own, read its output, then run the second with the literal value pasted in (review SKILL.md, command discipline)."
 fi
 
 # Services and containers: the reviewer never starts infrastructure.
