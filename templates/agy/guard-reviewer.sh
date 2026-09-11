@@ -78,14 +78,16 @@
 payload=$(cat)
 
 # agy hands the tool call over as JSON written by a Go encoder, and Go spells
-# the HTML-sensitive characters as escapes: `>` arrives as >, `<` as
-# <, `&` as &. Undocumented — the hooks page shows only `npm test` —
-# and seen by execution on agy 1.2.1: `gh pr view N > tmp/x` reached this hook
-# as "CommandLine":"gh pr view N > tmp/x", `echo a && echo b` as
-# "echo a && echo b". Fold them back before matching, or two rules
-# below are blind: the redirect rule never sees its `>`, and `npm test && git
-# push` walks past tier 1 because the `&&` before `git push` is not the
-# operator the command position expects (both live, in one review).
+# the HTML-sensitive characters as JSON escapes: `>` arrives as backslash-u003e,
+# `<` as backslash-u003c, `&` as backslash-u0026. Undocumented — the hooks page
+# shows only `npm test` — and seen by execution on agy 1.2.1: `gh pr view N >
+# tmp/x` reached this hook with its `>` spelled as that escape, `echo a && echo
+# b` with both `&`. Fold them back before matching, or two rules below are
+# blind: the redirect rule never sees its `>`, and `npm test && git push` walks
+# past tier 1 because the `&&` before `git push` is not the operator the
+# command position expects (both live, in one review). The escapes are spelled
+# out in words here on purpose: a commit made through an API client that
+# decodes JSON escapes turns the literal sequence into the bare character.
 payload=$(printf '%s' "$payload" | sed -e 's/\\u003[eE]/>/g' -e 's/\\u003[cC]/</g' -e 's/\\u0026/\&/g')
 
 # A command position: start of payload, a quote/backtick, a shell operator, or
