@@ -55,8 +55,10 @@ Copy both files as they are — no placeholders, nothing repo-specific:
 Two tiers, one mechanic. Tier 1 denies `git push`, `gh pr merge`, `gh pr close` and
 the `gh api` routes behind them — the reviewer is report-only. Tier 2 denies the
 command shapes the review skill forbids (stream editors, `export` prefixes, `$(…)`
-substitution, `xargs`, docker, inline eval, bare `npx`, `gh … > file` redirects), each
-with a one-line reason naming the sanctioned alternative — because an "ask" for an
+substitution, `xargs`, docker, inline eval, bare `npx`, any file written through the
+shell — heredoc, redirect, tee — `mv`/`cp`/`ln`, `rm` in any form but
+`rm -rf <one directory>`, package installs, and `gh api`), each with a one-line reason
+naming the sanctioned alternative — because an "ask" for an
 off-protocol command reaches a human who cannot judge it without reading the code
 under review, which this pipeline is built to avoid. A deny that carries the reason
 needs no human and the session self-corrects. Everything else answers
@@ -98,6 +100,24 @@ probe tests and the gate write there. **Not the main checkout**: it holds the au
 uncommitted work, which is the one tree the reviewer must never touch, and it is not
 where the reviewer runs anyway (one adopted repo granted exactly that, so every read inside the
 review worktree asked, and a write to the author's copy would not have).
+
+Two more grants per repository, for git itself. A worktree keeps its repository OUTSIDE
+its own directory (`.git` is a one-line pointer into the main checkout's
+`.git/worktrees/<name>`), and the sandbox mounts nothing it was not granted — so inside
+it every git command failed with `fatal: not a git repository`, the reviewer spent its
+first minutes diagnosing the sandbox, and every git read ran on the unsandboxed retry
+(seen live, at the start of every review). Grant the main checkout's `.git` read-only
+and the worktree's own git directory read-write, and `git status` answers inside the
+sandbox (verified on agy 1.2.1):
+
+    read_file(<repo-parent>/<repo>/.git)
+    write_file(<repo-parent>/<repo>/.git/worktrees/<repo>-wt-review)
+
+Read-only on the main `.git` is the point: refs and objects are readable, the author's
+branches are not writable. The one remaining noise, git's fsmonitor daemon answering
+over a unix socket the sandbox does not pass, `auto-review.sh` silences with
+per-worktree config (`core.fsmonitor false`), so no `error:` line tempts the reviewer
+into diagnostics.
 
 Rules are prefixes (`git` matches `git add`, not `github`), and agy 1.2.x also
 accepts `command(regex:…)` / `unsandboxed(regex:…)` — a regex rule can name an exact

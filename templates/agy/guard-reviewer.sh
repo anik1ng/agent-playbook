@@ -133,6 +133,47 @@ if hit "${A}xargs([[:space:]]|$)"; then
   deny "Off-protocol: never pipe into xargs - it runs whatever the previous command printed, so the line carries a command no allowlist rule can read. Run the first command on its own, read its output, then run the second with the literal value pasted in (review SKILL.md, command discipline)."
 fi
 
+# Files written through the shell: a heredoc, a redirect after a printing
+# command, or tee. The skill orders every write through the file-editing
+# tool, which the permission layer scopes to the worktree; a shell write is
+# scoped to nothing and stalls on a prompt per line (live: five prompts in
+# one review, all `cat << 'EOF' > file`). The redirect rule names the
+# printing commands rather than any command, so `grep "a > b" src` — a
+# search for a comparison — stays an ordinary read.
+if hit '<<-?[[:space:]]*["'"'"']?[A-Za-z_]' || hit "${A}(cat|echo|printf)[[:space:]][^|;&<>]*>{1,2}[[:space:]]*[A-Za-z0-9_./~-]" || hit "${A}tee([[:space:]]|$)"; then
+  deny "Off-protocol: never write a file through the shell (heredoc, redirect, tee). Create it with the file-editing tool, at its final path - the probe's name comes from the test runner's include pattern (review SKILL.md, command discipline)."
+fi
+
+# Moves, copies, links: a command rule has no path scope, so none of these
+# can be seeded, and each one prompts the human (live: a probe renamed twice
+# to hit the runner's pattern, then a symlink planted in node_modules).
+if hit "${A}(mv|cp|ln)[[:space:]]"; then
+  deny "Off-protocol: mv / cp / ln are unseedable - a command rule has no path scope. Write the file at its final path with the file-editing tool; read the test runner's config for the name a probe must carry (review SKILL.md, command discipline)."
+fi
+
+# rm in any form but `rm -rf <one directory>`: a file list can never be
+# pre-approved, and a flag set other than -rf is a different command to the
+# allowlist. The skill deletes scratch as a whole directory with the one exact
+# command the repo seeds (`rm -rf tmp`, `rm -rf src/test/probes`, ...).
+if hit "${A}rm[[:space:]]+([^-[:space:]]|-([^r[:space:]]|r([^f[:space:]]|f[^[:space:]]))|-rf[[:space:]]+[A-Za-z0-9_./~-]+[[:space:]]+[A-Za-z0-9_./~\"'-])"; then
+  deny "Off-protocol: rm with a file list or with flags other than -rf is unseedable. Delete the whole scratch directory with the one exact command the repo pre-approves, e.g. 'rm -rf tmp' (review SKILL.md, command discipline)."
+fi
+
+# Installing anything: the launcher installs the PR head's dependencies
+# before the session starts, so an install here means the reviewer is
+# reaching for a package the repo does not depend on directly (live: a probe
+# importing a transitive package, then `pnpm install`, then `npm init` in a
+# scratch directory, then a symlink into node_modules).
+if hit "${A}(pnpm|npm|yarn|bun)[[:space:]]+(install|i|add|ci|init)([[:space:]]|$|[\"'&;|])"; then
+  deny "Off-protocol: never install packages - the launcher installed the PR head's dependencies before you started. A module a probe cannot import is not a direct dependency (pnpm exposes no transitive package): probe it through the module in the repo that wraps it, and never touch node_modules (review SKILL.md, command discipline)."
+fi
+
+# gh api for a read: unseeded on purpose (POST hides behind the prefix), and
+# every read a review needs has a seeded gh subcommand.
+if hit "${A}gh[[:space:]]+api([[:space:]]|$|[\"'])"; then
+  deny "Off-protocol: gh api is unseedable (POST hides behind the prefix). Use the seeded reads: gh pr view / diff / checks, gh issue view, gh ruleset check (review SKILL.md, command discipline)."
+fi
+
 # Services and containers: the reviewer never starts infrastructure.
 if hit "${A}docker[[:space:]]"; then
   deny "Off-protocol: never start services or containers. CI owns integration infrastructure - read its check on the PR instead of rebuilding the environment (review SKILL.md, command discipline)."

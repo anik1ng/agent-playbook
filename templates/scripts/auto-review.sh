@@ -909,17 +909,32 @@ if ! git -C "$WORKTREE" reset --hard "$HEAD_SHA" >>"$LOG" 2>&1; then
   exit 1
 fi
 # The previous review's scratch. `clean -fd` leaves IGNORED files alone, so
-# node_modules survives and the install below is skipped — which is the point
-# of keeping one worktree. Probe files a repo keeps in an ignored directory
-# survive too; the review skill's own rule (delete probes before the verdict)
-# is what covers those.
+# node_modules survives and the full provisioning below is skipped — which is
+# the point of keeping one worktree. Probe files a repo keeps in an ignored
+# directory survive too; the review skill's own rule (delete probes before the
+# verdict) is what covers those.
 git -C "$WORKTREE" clean -fd >>"$LOG" 2>&1 || true
+
+# Git's fsmonitor daemon answers over a unix socket, and the reviewer's
+# sandbox does not pass one: every sandboxed git command in the worktree then
+# prints `error: fsmonitor_ipc__send_query` above an otherwise correct
+# answer, and a reviewer that reads "error:" goes diagnosing instead of
+# reviewing (seen live). Off for THIS worktree only — per-worktree config,
+# never the author's repository settings. Best-effort: a git too old for
+# worktree config just keeps the noise.
+git -C "$MAIN" config extensions.worktreeConfig true >>"$LOG" 2>&1 || true
+git -C "$WORKTREE" config --worktree core.fsmonitor false >>"$LOG" 2>&1 || true
 
 # The reviewer runs the local gate, so it needs the same provisioning any
 # worktree gets: with the worktree module, an allowlisted `.env` (secrets
 # withheld — this is another vendor's model) plus the install; without it,
-# the plain install. Skipped once the worktree has node_modules, which is
-# every review after the first.
+# the plain install. The FULL provisioning runs once, when the worktree has
+# no node_modules; every later review still runs the install alone, because
+# a PR can add a dependency, and a tree installed for an earlier head does
+# not have it — the reviewer then cannot import the package the diff is
+# about, and the only way out it has is a `pnpm install` the allowlist
+# refuses (seen live, a whole review spent on it). A frozen install on an
+# up-to-date tree is a no-op that costs seconds.
 if [ ! -d "$WORKTREE/node_modules" ]; then
   echo "provisioning $WORKTREE" >>"$LOG"
   if [ -f "$MAIN/scripts/setup-worktree.mts" ]; then
@@ -935,6 +950,13 @@ if [ ! -d "$WORKTREE/node_modules" ]; then
       exit 1
     }
   fi
+else
+  echo "installing the PR head's dependencies in $WORKTREE" >>"$LOG"
+  (cd "$WORKTREE" && $INSTALL) >>"$LOG" 2>&1 || {
+    echo "auto-review: install failed in $WORKTREE (see $LOG)" >&2
+    review_died "the PR head's dependencies could not be installed — see the log"
+    exit 1
+  }
 fi
 
 review_pill "Reviewing · PR #$PR" eye "#A855F7" working

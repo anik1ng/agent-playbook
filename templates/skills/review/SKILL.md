@@ -48,6 +48,21 @@ Rules of engagement:
     containing it, however seeded its parts are [seen live: the freshness check, twice].
     Run the inner command on its own, read its output, then run the outer command with
     the literal value pasted in.
+  - Never `mv`, `cp` or `ln`, and never `rm` anything but the one scratch directory
+    (below): a command rule has no path scope, so none of these can be seeded, and
+    each one stalls on a prompt [seen live: a probe renamed twice to hit the runner's
+    pattern]. A file goes to its FINAL path in one write — so before creating a probe,
+    read the test runner's config for the include pattern that makes a probe file
+    visible (`include` in `vitest.config.ts`, in a vitest repo): a file outside it runs
+    nothing, and the rename that follows is an `mv`.
+  - Never install anything — no `pnpm install`, `npm install`, `npm init`, no scratch
+    package: the launcher installs the PR head's dependencies before you start. A
+    module a probe cannot import is not a direct dependency of the repo (pnpm exposes
+    no transitive package), so probe it through the module in the repo that wraps it,
+    and never touch `node_modules` [seen live: a symlink planted there].
+  - Never `gh api`, even for a read — it is unseeded because POST hides behind the
+    prefix. Every read a review needs has a seeded form: `gh pr view|diff|checks`,
+    `gh issue view`, `gh ruleset check`.
   - Read files with the file-reading tool, or `cat` / `head` / `tail` — never `sed`,
     `awk` or `perl`, even read-only: sed's flags reorder freely, so no allowlist
     entry can cover the read form without also covering `sed -n -i …`, a silent
