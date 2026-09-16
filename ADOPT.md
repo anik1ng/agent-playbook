@@ -44,6 +44,7 @@ blocks a direct push.
 | `scripts/worktree/*` (9)     | `scripts/` (only when the worktree module is wanted) |
 | `scripts/schema-lock/*` (4)  | `scripts/` (only when the schema-lock check is wanted) |
 | `tooling/*` (3)              | repo root (only the ones "The static gate" installs)  |
+| `rust/*` (6 fragments)       | spliced into the files above — only where a Cargo.toml exists ("Rust"); never installed as files |
 
 Plus five RELATIVE symlinks: `.claude/skills/<name>` → `../../.agents/skills/<name>`.
 `.agents/` is the vendor-neutral home — Codex/ChatGPT and Antigravity/Gemini read it
@@ -63,13 +64,19 @@ scope later syncs to what actually moved:
     commit <sha>
     synced <YYYY-MM-DD>
 
-**Placeholders.** Only three files are rendered — `AGENTS.md`, `docs/RUNBOOK.md` and
-`ci.yml` carry `{{DEFAULT_BRANCH}}` / `{{PKG_MANAGER}}` / `{{INSTALL_CMD}}` /
-`{{TEST_CMD}}` plus ci.yml's two whole-line block placeholders — and `auto-review.sh`
-carries `{{REVIEW_CMD}}`. Where the schema-lock check is installed, its config carries
-`{{SCHEMA_SURFACE}}` (see that step). Everything else (the hook, the worktree scripts)
-detects its facts at runtime and is installed byte-for-byte. No `{{...}}` token may
-survive in anything you write.
+**Placeholders.** Few files are rendered. `AGENTS.md`, `docs/RUNBOOK.md` and `ci.yml`
+carry `{{DEFAULT_BRANCH}}` / `{{PKG_MANAGER}}` / `{{INSTALL_CMD}}` / `{{TEST_CMD}}` plus
+ci.yml's two whole-line block placeholders; `auto-review.sh` carries `{{REVIEW_CMD}}`;
+where the schema-lock check is installed, its config carries `{{SCHEMA_SURFACE}}` (see
+that step). The Rust placeholders — `{{RUST_JOB_BLOCK}}` (ci.yml),
+`{{RUST_JOB_TWIN_BLOCK}}` (ci-docs.yml), `{{RUST_AUDIT_JOB_BLOCK}}` (security.yml),
+`{{RUST_RUNBOOK_BLOCK}}` (RUNBOOK) and the inline `{{RUST_GATE}}` in both gate lines —
+render to the `templates/rust/` fragments where a Cargo.toml was detected and to
+NOTHING otherwise: a whole-line placeholder is deleted with its line, the inline one
+with no trace, so a repo without Rust renders exactly as it did before the placeholders
+existed ("Rust" below). Everything else (the hook, the worktree scripts) detects its
+facts at runtime and is installed byte-for-byte. No `{{...}}` token may survive in
+anything you write.
 
 ## Detect and render
 
@@ -94,6 +101,19 @@ survive in anything you write.
   ci.yml reads it.
 - **Missing gate tools**: see "The static gate" below — that step installs them, and
   ci.yml's steps follow from what it lands.
+- **Rust**: a `Cargo.toml` anywhere outside `node_modules/` and `target/`
+  (`git ls-files '*Cargo.toml' ':!node_modules/**'` — tracked files only, so a vendored
+  crate in a build directory does not count). Record its directory as
+  `{{CARGO_DIR}}`, in the `/`-rooted form Dependabot wants: `/` for a crate at the
+  repo root, `/src-tauri` for a Tauri app. Several Cargo.toml files (a workspace) → the
+  workspace root's directory. No `package.json` beside it → out of scope, say so: the
+  hook and CI read their scripts from `package.json`, and that contract stays. Rust
+  changes what "Rust" below renders and nothing else — no file is skipped or added for
+  it, and a repo without a Cargo.toml renders byte-for-byte as before.
+- **Tauri**: a `tauri` dependency in that Cargo.toml (`[dependencies]` — a
+  `tauri-build` in `[build-dependencies]` alone does not count). It affects ONE thing:
+  which system packages the Rust CI job installs on Linux (the `{{TAURI_DEPS_STEP}}`
+  fragment). There is no "Tauri edition" of anything else.
 - **Build-time env**: don't reason about it — RUN the build with every `.env.example`
   variable set to empty (`DATABASE_URL= … run build`; explicitly-empty values survive
   framework env loaders, reproducing a runner with no `.env`). A failure naming a
@@ -122,6 +142,10 @@ and a recommendation to take it**, one question each, and say what it costs:
 | `format:check` | `oxfmt` (the standard — see below) | `templates/tooling/.oxfmtrc.json` → repo root | one reformat-everything commit; keep it as its own commit so it never hides a real change |
 | `lint` | `oxlint` + `oxlint-tsgolint` (the standard — see below) | `templates/tooling/.oxlintrc.json` → repo root | type-aware rules surface real errors in existing code on the first run; fixing them is part of this step, not a follow-up |
 | `knip` | `knip` | none — it infers entry points; add `knip.json` only where it guesses wrong | usually finds dead exports and unused dependencies immediately; it is the only one of the three that sees ACROSS files, which neither tsc nor a linter does. Runs in CI only, never the pre-push hook — a mid-work branch legitimately carries a dead export for an hour |
+| `format:check:rust` _(Rust repos only)_ | `rustup component add rustfmt` — a toolchain component, nothing in `package.json` | none — rustfmt's defaults are the standard; a `rustfmt.toml` only where the repo already has one | one reformat-everything commit, kept as its own commit, exactly like oxfmt's; runs in the pre-push hook, seconds |
+| `lint:rust` _(Rust repos only)_ | `rustup component add clippy` | none — the default lint set with warnings denied (`-D warnings`); a `[lints.clippy]` table in Cargo.toml only where the repo already keeps one | the first run surfaces real findings in existing code, and fixing them is part of this step, not a follow-up; it COMPILES the crate, so the first hook run on a cold `target/` is minutes and every later one seconds |
+| `test:rust` _(Rust repos only)_ | nothing — `cargo test` ships with cargo | none | CI only, never the hook: it compiles the crate in the test profile. A crate with no tests still gets the script — an empty run is green, and the step exists so the first test written is already gated |
+| `audit:rust` _(Rust repos only)_ | `cargo install cargo-audit` locally (CI installs a prebuilt binary itself) | none — the RustSec database needs no config; an `--ignore RUSTSEC-…` WITH its reason and a removal date is the only thing a repo ever adds | red on the day an advisory names a crate already in `Cargo.lock`, on a PR that touched nothing Rust — that is the quarantine working, and the RUNBOOK says so; `cargo deny` is the heavier alternative (licenses, bans, sources) and is a repo's to choose in the script, with `taiki-e/install-action@cargo-deny` swapped into security.yml |
 
 **The linter is ONE standard across every repo, not a per-repo taste**: `oxlint` +
 `oxlint-tsgolint`, with `templates/tooling/.oxlintrc.json` and
@@ -159,6 +183,25 @@ the formatter — it needs no type checker.
 Scripts to add — the names matter, ci.yml and `.githooks/pre-push` both look for exactly
 these: `"format": "oxfmt"` (in-place write is its default mode),
 `"format:check": "oxfmt --check"`, `"lint": "oxlint --type-aware"`, `"knip": "knip"`.
+
+And where a Cargo.toml was detected, the Rust four — the JS name plus `:rust`, one rule
+for all of them, and every cargo flag lives HERE and nowhere else (the hook, ci.yml and
+security.yml only ever say `<pkg> run <script>`), which is what keeps those files
+byte-identical across a crate at the root and a crate in `src-tauri/`:
+
+    "format:check:rust": "cargo fmt --manifest-path src-tauri/Cargo.toml --all --check",
+    "lint:rust": "cargo clippy --manifest-path src-tauri/Cargo.toml --all-targets -- -D warnings",
+    "test:rust": "cargo test --manifest-path src-tauri/Cargo.toml",
+    "audit:rust": "cargo audit --file src-tauri/Cargo.lock"
+
+(`src-tauri/` being the detected Cargo directory; drop the `--manifest-path` /
+`--file` for a crate at the root.) A repo that already runs one of these under another
+name (`check:rust`, `clippy`, `cargo:test` — seen live) is offered the RENAME, never a
+second script with different flags beside the first: two scripts running clippy with two
+flag sets is two gates checking different things. Missing scripts are offered, never
+invented — a `test:rust` on a crate with no tests is still an honest green, but a
+`lint:rust` the human declined is a declined row in "Tooling decision records", exactly
+as for `lint`.
 
 Then, whatever the answers:
 
@@ -231,6 +274,83 @@ move and deferred it still deserves a good linter meanwhile. It requires TypeScr
 < 6.1 (typescript-eslint's peer range stops there, and forcing the install past it
 crashes ESLint at startup), which is itself a fact for the report — a repo on TypeScript
 7 cannot defer the linter migration, because there is nothing to defer TO.
+
+## Rust (detected — the second half of the gate, or nothing)
+
+Everything in this section happens only where "Detect and render" found a Cargo.toml.
+Where it did not, the whole section reduces to one action: delete the five whole-line
+placeholders and the inline `{{RUST_GATE}}`, and the rendered files are what the
+playbook rendered before Rust existed in it — that equivalence is the design, and
+verification check 2 (no surviving token) plus check 9 below are what prove it held.
+
+The pieces live in `templates/rust/`, six fragments that are SPLICED, never installed
+as files. Render each with the same placeholder values as the file it lands in
+(`{{PKG_MANAGER}}`, `{{INSTALL_CMD}}`), plus `{{CARGO_DIR}}`:
+
+| fragment | goes into | replacing |
+| --- | --- | --- |
+| `ci-job.yml` | `ci.yml` | the `{{RUST_JOB_BLOCK}}` line — a second job, `rust (format, clippy, test)` |
+| `tauri-deps-step.yml` | `ci-job.yml` | its `{{TAURI_DEPS_STEP}}` line, ONLY where Tauri was detected; deleted otherwise |
+| `ci-docs-twin.yml` | `ci-docs.yml` | the `{{RUST_JOB_TWIN_BLOCK}}` line — the no-op twin, same job name |
+| `security-job.yml` | `security.yml` | the `{{RUST_AUDIT_JOB_BLOCK}}` line — `cargo audit (RustSec advisories)` |
+| `dependabot-cargo.yml` | `dependabot.yml` | nothing — APPENDED under `updates:`, the same way the `docker` entry is (a declared local part, UPDATE.md) |
+| `runbook-ci-shape.md` | `docs/RUNBOOK.md` | the `{{RUST_RUNBOOK_BLOCK}}` line, under "CI shape" |
+
+And the inline `{{RUST_GATE}}` in the gate line of `AGENTS.md` and `docs/RUNBOOK.md`
+renders to the Rust scripts appended in the same shape as the JS ones — `
+&& <pkg> run format:check:rust && <pkg> run lint:rust && <pkg> run test:rust` (with the
+leading ` && `) — listing exactly the scripts the repo ended up with, the same rule as
+the JS half: a gate line promising a clippy the repo declined is the version every
+future session will believe. `audit:rust` is NOT in the gate line: it needs the network
+for the advisory database and answers a question about the world, not about the diff,
+so it belongs to CI the way gitleaks does.
+
+The job is rendered WHOLE, then trimmed to the scripts that exist, exactly as `checks`
+is: a step calling a `test:rust` the human declined is a red first run. Update the job
+`name:` to the surviving steps and mirror it byte-for-byte into the twin — the
+required-check rule from "Detect and render" applies to this job name exactly as to
+`checks`. `.githooks/pre-push` needs nothing: it runs `format:check:rust` and
+`lint:rust` when `package.json` defines them and never mentions them otherwise, and
+`test:rust` stays out of it for the reason the JS tests do, plus compile time (the hook's
+own header says so).
+
+Three facts to establish by RUNNING, not by reading, and to report as
+`[verified-by-execution]`:
+
+1. **Do clippy and the tests need the front end built first?** A Tauri crate's
+   `tauri::generate_context!()` embeds the `frontendDist` directory at compile time and
+   PANICS when it does not exist — unless the build is a dev build with a `devUrl`
+   configured, in which case it embeds nothing and never looks. Plain `cargo clippy` /
+   `cargo test` (no `custom-protocol` feature, which only `tauri build` enables) ARE dev
+   builds, so a repo with a `devUrl` in `tauri.conf.json` — the common shape — needs no
+   front end for the Rust job. Do not trust that paragraph: in a scratch clone with no
+   `dist/`, run `<pkg> run lint:rust`. Green → delete the `{{RUST_FRONTEND_BUILD_STEP}}`
+   line. A panic naming `frontendDist` → render that line as
+   `      - run: <pkg> run build` (six-space indent, a step before the Rust scripts;
+   the install above it is already in the job for this reason), and say in the summary
+   that the Rust job carries a front-end build and why. Where the build needs env
+   (`{{BUILD_ENV_BLOCK}}` in `checks`), the same fake values go on this step.
+2. **The Tauri package list compiles the crate on a runner.** The fragment carries the
+   Debian/Ubuntu list from Tauri's own prerequisites page (v2, read 2026-09-16), minus
+   what the runner image already ships. It is a list that moves with WebKitGTK: on a
+   Tauri repo, re-read that page before rendering and correct the fragment's line if the
+   page changed — and report the diff upstream, the playbook wants it. On a non-Tauri
+   crate with native dependencies of its own (a `-sys` crate, OpenSSL), the first CI run
+   is the probe: a red `rust` job naming a missing `.h` or `.pc` is the repo's own apt
+   line to add to that job, its own decision, recorded in the PR that adds it.
+3. **The hook probe from "Verify the installation" (check 3) already covers the Rust
+   scripts** — it exercises the lock, not the gate. Run the gate half once by hand:
+   `<pkg> run format:check:rust && <pkg> run lint:rust` on the clean tree, so the first
+   push does not meet clippy's first opinion of the codebase as a surprise. Fixing what
+   it finds is part of the static-gate step, as for oxlint.
+
+Two things the rest of the workflow already handles, said here so nobody looks for a
+Rust special case: the reviewer runs the Rust half through the same `package.json`
+delegators (`templates/agy/README.md` seeds them beside the JS gate; bare `cargo` is
+unseeded on purpose), and `Cargo.lock` conflicts follow the lockfile rule in
+`AGENTS.md` — resolve `Cargo.toml`, then let cargo rebuild the lock (`cargo update -w`
+touches only what the manifest change requires). `SETUP.md` §2 lists the two extra
+required checks and §4 the three extra actions to allowlist.
 
 ## The reviewer (auto-review)
 
@@ -561,7 +681,9 @@ summarized to "all good". A SKIP is not a pass.
 4. ci.yml's steps match `package.json`'s gate scripts in BOTH directions, ci-docs.yml's
    job `name:` is byte-identical to ci.yml's, and the gate line in `AGENTS.md` and
    `docs/RUNBOOK.md` lists exactly those scripts — a gate line promising a linter the
-   repo does not have is the version every future session will believe.
+   repo does not have is the version every future session will believe. Where ci.yml
+   carries the Rust job, the same three-way match holds for it: its steps against the
+   `*:rust` scripts, its `name:` against the twin's, and the gate lines' Rust tail.
 5. Merge settings via `gh api repos/{owner}/{repo}`: squash on, merge/rebase off,
    delete-branch-on-merge on.
 6. Auto-review, where installed: executable, no placeholder, and the CLI its rendered
@@ -573,15 +695,27 @@ summarized to "all good". A SKIP is not a pass.
    it from a clean default-branch checkout answers green with "changes no schema file" —
    proving the script runs, with zero side effects and no `gh` needed. (An unfilled
    `{{SCHEMA_SURFACE}}` is already a FAIL under check 2.)
+9. Rust, both ways. No Cargo.toml in the tree →
+   `grep -ilwE 'rust|cargo|clippy' AGENTS.md docs/RUNBOOK.md .github/workflows/ci.yml .github/workflows/ci-docs.yml .github/workflows/security.yml .github/dependabot.yml`
+   prints nothing (`-w`, because `trustLockfile` in the RUNBOOK is not Rust; the hook
+   is exempt: it names the scripts by design and is byte-identical everywhere). A hit =
+   FAIL — a Rust fragment was rendered into a repo that has no Rust. A Cargo.toml in the
+   tree → the four `*:rust` scripts exist in
+   `package.json` or their absence is recorded in "Tooling decision records";
+   `security.yml` carries the `cargo-audit` job; `dependabot.yml` carries a `cargo`
+   entry whose `directory` is the Cargo directory; and `<pkg> run lint:rust` answers
+   green on the clean tree (the hook will run it on the first push either way — better
+   to learn here).
 
 ## Summarize and offer the first commit
 
 Print: what was written vs what existed and how each conflict was resolved; the detected
-values (branch, package manager, test command, database yes/no, reviewer CLI or "reviews
-stay manual", worktree module and its env allowlist); the clean-env build result as
-something you RAN; both reviewer probes; what was declined (recorded as accepted); and
-anything left aspirational. Then offer to commit — conventional title, no AI-attribution
-trailers:
+values (branch, package manager, test command, database yes/no, Rust yes/no — with the
+Cargo directory, Tauri yes/no and whether the Rust job builds the front end first —
+reviewer CLI or "reviews stay manual", worktree module and its env allowlist); the
+clean-env build result as something you RAN; both reviewer probes; what was declined
+(recorded as accepted); and anything left aspirational. Then offer to commit —
+conventional title, no AI-attribution trailers:
 
     chore(agents): adopt agent-playbook
 
