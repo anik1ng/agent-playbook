@@ -110,13 +110,24 @@ difference is drift to sync — EXCEPT these declared local parts, which always 
   which reads the same a year later: OFFER to run it now (gitleaks over the full
   history, in the sync's own worktree) and record the date in the same PR. Report what
   the sweep finds VERBATIM before recording anything; never invent a date, and if the
-  human says they swept by hand, the date is theirs to supply.
+  human says they swept by hand, the date is theirs to supply. And its
+  `{{RUST_AUDIT_JOB_BLOCK}}` line, which the repo carries as either NOTHING (no
+  Cargo.toml) or the rendered `templates/rust/security-job.yml` (with `{{PKG_MANAGER}}`
+  filled in) — compare the rest of the file byte-for-byte and the job against the
+  fragment the same way `REVIEW_CMD`'s shape is checked: present where the tree holds a
+  Cargo.toml, absent where it does not, and never a third shape. The same rule covers
+  `ci-docs.yml`'s `{{RUST_JOB_TWIN_BLOCK}}` line below.
 - `dependabot.yml` — a `docker` ecosystem entry, where the repo added one for its own
   `Dockerfile` (ADOPT.md's snippet); the template ships without it on purpose. The check
   runs BOTH ways, every sync: a tree that holds a `Dockerfile` while `dependabot.yml`
   has no `docker` entry gets the OFFER — a repo that grew its Dockerfile after adoption
   is otherwise never asked, and its base image stays unwatched forever (how one adopted repo's
-  build image went stale in silence).
+  build image went stale in silence). The `cargo` entry (`templates/rust/dependabot-cargo.yml`)
+  is the same kind of local part with the same both-ways check: a tree holding a
+  Cargo.toml while `dependabot.yml` has no `cargo` entry gets the OFFER — and that is
+  one symptom of a larger one, a repo that grew a Cargo.toml AFTER adoption, for which
+  the offer is ADOPT.md's whole "Rust" section (the CI job and its twin, the audit job,
+  the scripts, the gate lines), reported under "static-gate gaps" below.
 - `settings.json` — everything except the template's own content: the `attribution`
   keys, the auto-review allow rule, and the task-status `hooks` entries; the file was
   installed by merging, so local content is the design working. The hooks entries are
@@ -158,7 +169,10 @@ difference is drift to sync — EXCEPT these declared local parts, which always 
   the playbook's to keep in step.
 - `ci-docs.yml` — its job `name:` and `paths:` mirror THIS repo's `ci.yml`. Where they
   mirror it they are correct; where they don't, that is a finding for the human — the
-  required check hangs on some class of PR either way.
+  required check hangs on some class of PR either way. Its last line is the Rust twin
+  (`templates/rust/ci-docs-twin.yml`) exactly where `ci.yml` carries the Rust job, under
+  that job's exact name, and nothing where it does not: a Rust job with no twin hangs
+  every doc-only PR, and a twin with no job reports a green check for nothing.
 - `.agents/guard-reviewer.sh` + `.agents/hooks.json` (← `templates/agy/`) — Class A
   where the repo HAS them, with one declared insertion: a best-effort notify line the
   repo may have added to the guard's non-matching branch. Where the repo does NOT have
@@ -178,10 +192,14 @@ choice) / **present only in the repo** (not yours to delete; report and leave it
 is written; edits happen only on a yes:
 
 - **Gaps.** For each of `format:check`, `lint` and `knip` that `package.json` has no
-  script for: say it is missing, say what it would catch that the existing scripts
-  cannot, and offer ADOPT.md's "The static gate" step. A gap accepted once is invisible
-  forever otherwise — the gate is what stands in for the human reading diffs, and a repo
-  can run for months on a third of it with nothing saying so.
+  script for — and, where the tree holds a Cargo.toml, each of `format:check:rust`,
+  `lint:rust`, `test:rust` and `audit:rust` — say it is missing, say what it would catch
+  that the existing scripts cannot, and offer ADOPT.md's "The static gate" step (its
+  "Rust" section for the second set: a repo adopted before the playbook knew Rust, or
+  one that grew a crate after adoption, carries the whole Rust half as gaps, and the
+  offer is the section, not four scripts). A gap accepted once is invisible forever
+  otherwise — the gate is what stands in for the human reading diffs, and a repo can run
+  for months on a third of it with nothing saying so.
 
   **An accepted offer is executed in THIS sync**, exactly as ADOPT.md writes the step —
   install, the ready config, fixing what the new tools flag in existing code, the
