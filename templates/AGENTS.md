@@ -152,7 +152,7 @@ here WITH the condition that makes them mandatory. -->
   drift it wins and the skill file is the bug.
 - Run the full local gate before pushing (format with the repo's formatter, never by hand):
 
-      {{PKG_MANAGER}} run format:check && {{PKG_MANAGER}} run type-check && {{PKG_MANAGER}} run lint && {{PKG_MANAGER}} run knip && {{TEST_CMD}}
+      {{PKG_MANAGER}} run format:check && {{PKG_MANAGER}} run type-check && {{PKG_MANAGER}} run lint && {{PKG_MANAGER}} run knip && {{TEST_CMD}}{{RUST_GATE}}
 
 - Push your branch and open a PR against `{{DEFAULT_BRANCH}}`:
 
@@ -162,7 +162,7 @@ here WITH the condition that makes them mandatory. -->
 - The PR title becomes the squash-commit title — write it as a conventional commit
   (`PR hygiene` fails a non-conventional title).
 - Fill the PR template honestly, and keep the body proportional to the diff. "How to test
-  by hand" is the ONLY thing the human reads before testing; "Risk nearby" must declare
+  by hand" is the ONLY section the human reads before testing; "Risk nearby" must declare
   any test changes.
 - `## Docs` is machine-required: `* <file> — <what changed>` bullets, or `Docs: none —
   <reason>`. Doc drift is a bug: if the diff changes behavior described in `README.md`,

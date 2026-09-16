@@ -78,6 +78,9 @@ as the job names stand in your repo:
 - `checks (…)` — the CI job (its name lists the steps that survived adoption)
 - `PR body & title hygiene`
 - `gitleaks (secret scan)`
+- where the repo holds a Cargo.toml, two more: `rust (…)` — the Rust job, which has
+  its own no-op twin in `ci-docs.yml` for the same reason `checks` does — and
+  `cargo audit (RustSec advisories)`, which like gitleaks runs on every PR.
 
 **Why requiring `checks` is safe here.** `ci.yml` skips doc-only PRs by design, and a
 workflow skipped by its path filter reports nothing — a required check that never reports
@@ -109,9 +112,10 @@ how.
 - Optional, in the spirit of the supply-chain policy: Actions permissions → "Allow
   {owner}, and select non-{owner} actions" with an allowlist like
   `actions/*, gitleaks/gitleaks-action@*` (extend it when a template adds an action — e.g.
-  `oven-sh/setup-bun@*` on a bun repo). Do NOT require full-SHA pinning: the templates
-  reference actions by major tag, and updating them is Dependabot's job, governed by the
-  cooldowns.
+  `oven-sh/setup-bun@*` on a bun repo, and on a Rust repo the three the Rust jobs use:
+  `dtolnay/rust-toolchain@*, Swatinem/rust-cache@*, taiki-e/install-action@*`). Do NOT
+  require full-SHA pinning: the templates reference actions by major tag, and updating
+  them is Dependabot's job, governed by the cooldowns.
 
 ## 5. Features — Settings → General → Features
 
