@@ -1,0 +1,47 @@
+  # The Rust job — templates/rust/ci-job.yml in the playbook, rendered into
+  # ci.yml's RUST_JOB_BLOCK placeholder line by ADOPT.md where the repo holds a
+  # Cargo.toml beside its package.json, deleted otherwise. A second JOB, not
+  # steps appended to `checks`: clippy and `cargo test` COMPILE the crate, so
+  # a cold cache costs minutes where the JS gate costs seconds, and a Rust
+  # compile queued behind the JS install is wall-clock nobody gets back. It
+  # also fails independently, which is what lets its name be a required
+  # status check of its own (ci-docs.yml carries its no-op twin under the
+  # same name).
+  #
+  # ubuntu only, on purpose: rustfmt, clippy and unit tests are
+  # platform-neutral. A release or bundle build — the macOS/Windows matrix a
+  # desktop app ships from — is out of scope for this gate.
+  rust:
+    name: rust (format, clippy, test)
+    runs-on: ubuntu-latest
+    # Wider than `checks` because the first run on an empty cache compiles
+    # every dependency; still insurance, not a target.
+    timeout-minutes: 30
+    steps:
+      - uses: actions/checkout@v7
+{{TAURI_DEPS_STEP}}
+      - uses: dtolnay/rust-toolchain@stable
+        with:
+          components: rustfmt, clippy
+      # Keyed on the Cargo directory's Cargo.lock; restores its `target/`,
+      # which is where clippy and the tests build.
+      - uses: Swatinem/rust-cache@v2
+        with:
+          workspaces: .{{CARGO_DIR}}
+      # The Rust scripts are dispatched through package.json like every other
+      # gate script (ADOPT.md "Rust"): the cargo invocations — including
+      # `--manifest-path` for a Cargo.toml in a subdirectory — live in the
+      # repo's scripts, never in this file. The install is what makes `run`
+      # predictable (pnpm 11 verifies the tree before running any script and
+      # installs on its own when it is missing) and what the frontend build
+      # below needs where ADOPT.md rendered one.
+      - run: corepack enable
+      - uses: actions/setup-node@v7
+        with:
+          node-version-file: .nvmrc
+          cache: {{PKG_MANAGER}}
+      - run: {{INSTALL_CMD}}
+{{RUST_FRONTEND_BUILD_STEP}}
+      - run: {{PKG_MANAGER}} run format:check:rust
+      - run: {{PKG_MANAGER}} run lint:rust
+      - run: {{PKG_MANAGER}} run test:rust

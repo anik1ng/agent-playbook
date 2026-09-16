@@ -50,10 +50,14 @@ decision verdicts stay, git keeps everything deleted — in its own reviewed PR.
 AGENTS.md                          the rules — one canonical file (yours after adoption)
 docs/RUNBOOK.md                    the human's page: what YOU run and remember (yours)
 .github/workflows/ci.yml           the gate: format, types, lint, build, tests (yours)
+                                   — plus a Rust job (rustfmt, clippy, cargo test) where
+                                   a Cargo.toml exists
 .github/workflows/ci-docs.yml      its no-op twin: keeps doc-only PRs mergeable
 .github/workflows/pr-hygiene.yml   PR body links an issue, title is conventional, Docs filled
-.github/workflows/security.yml     gitleaks secret scan on every PR
-.github/dependabot.yml             grouped weekly bumps, supply-chain cooldowns
+.github/workflows/security.yml     gitleaks secret scan on every PR — plus cargo audit
+                                   where a Cargo.toml exists
+.github/dependabot.yml             grouped weekly bumps, supply-chain cooldowns (npm,
+                                   actions — and cargo where a Cargo.toml exists)
 .github/pull_request_template.md
 .githooks/pre-push                 the lock: no direct pushes to the default branch
 .claude/settings.json              no AI-attribution trailers; allows the reviewer launch
@@ -84,11 +88,16 @@ adoption and reviews stay manual, with nothing else changed.
 reads `.claude/skills/`, which symlinks into it. One real copy, nothing to drift — and
 the review protocol must be readable by a tool from another vendor, which is the point.
 
-**Assumptions**: Node/TypeScript; GitHub with a working `gh`; and cmux — the workspace
-manager this workflow's automation is built around: the automatic reviewer and task
-workspaces require it, and without it reviews are manual (`/review <n>`) and worktrees
-are plain git. Other toolchains and forges: the templates say what each piece is for;
-adapt with judgment.
+**Assumptions**: Node/TypeScript, with **Rust as a detected addition** — a repo holding
+a Cargo.toml beside its `package.json` (a Tauri desktop app, or any Cargo crate next to
+a Node front end) gets a Rust job in CI, a RustSec audit beside gitleaks, a `cargo`
+entry in Dependabot and the Rust scripts in the hook and the gate line, every piece
+conditional on that file existing and every cargo invocation living in the repo's own
+`package.json` scripts; a pure-Rust repo with no `package.json` is not covered. GitHub
+with a working `gh`; and cmux — the workspace manager this workflow's automation is
+built around: the automatic reviewer and task workspaces require it, and without it
+reviews are manual (`/review <n>`) and worktrees are plain git. Other toolchains and
+forges: the templates say what each piece is for; adapt with judgment.
 
 `AGENTS.md` in the target repo owns every rule; the skills point at it and lose on drift.
 Its lists (magnet files, "Never", decision records) ship nearly empty on purpose — fill

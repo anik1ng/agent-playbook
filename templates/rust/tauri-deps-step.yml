@@ -1,0 +1,7 @@
+      # Tauri compiles against WebKitGTK and friends, and the runner image
+      # ships none of them. This is the Debian/Ubuntu list from Tauri's own
+      # prerequisites page (v2 docs, read 2026-09-16) minus what the image
+      # already carries (build-essential, curl, wget, file). When this step
+      # goes red on a fresh runner image, re-read that page before touching
+      # the list — it moves with WebKitGTK, not with this repo.
+      - run: sudo apt-get update && sudo apt-get install -y libwebkit2gtk-4.1-dev libayatana-appindicator3-dev librsvg2-dev libxdo-dev libssl-dev

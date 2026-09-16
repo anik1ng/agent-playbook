@@ -1,0 +1,25 @@
+  # Rust crates — the entry ADOPT.md appends where a Cargo.toml exists, a
+  # declared local part every sync preserves (UPDATE.md). Same cadence,
+  # cooldowns and grouping as the npm entry: crates.io has the same
+  # fresh-release exposure window, and Dependabot's cooldown is
+  # per-SemVer-level for cargo as it is for npm. `directory` is the CARGO
+  # directory (`/` for a crate at the root, `/src-tauri` for a Tauri app),
+  # not the package.json's.
+  - package-ecosystem: cargo
+    directory: {{CARGO_DIR}}
+    schedule:
+      interval: weekly
+      day: monday
+    open-pull-requests-limit: 5
+    cooldown:
+      semver-major-days: 14
+      semver-minor-days: 3
+      semver-patch-days: 3
+    labels:
+      - dependencies
+      - rust
+    groups:
+      cargo-minor-patch:
+        update-types:
+          - minor
+          - patch

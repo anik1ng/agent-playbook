@@ -80,3 +80,4 @@ jobs:
 {{BUILD_ENV_BLOCK}}
         run: {{PKG_MANAGER}} run build
       - run: {{TEST_CMD}}
+{{RUST_JOB_BLOCK}}

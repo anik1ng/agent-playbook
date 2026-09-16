@@ -69,3 +69,4 @@ jobs:
           echo "real checks job did not run. Nothing it checks reads prose — the gate"
           echo "scripts, the build and the tests all read code. This run exists so the"
           echo "required check reports."
+{{RUST_JOB_TWIN_BLOCK}}

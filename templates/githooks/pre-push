@@ -7,10 +7,14 @@
 #
 #   1. Blocks any direct push to the default branch, including force-pushes and
 #      deletion.
-#   2. Runs the static gate (format:check, lint, type-check — whichever of those
-#      scripts exist) before any branch push, so a red push never reaches CI.
+#   2. Runs the static gate (format:check, lint, type-check, and their Rust
+#      twins format:check:rust and lint:rust — whichever of those scripts
+#      exist) before any branch push, so a red push never reaches CI.
 #      The full test suite deliberately stays with CI and the local gate: tests
 #      often need a database or fixtures that remote agent sessions don't have.
+#      test:rust stays out for that reason and one of its own: `cargo test`
+#      compiles the crate in the test profile, which on a laptop is the
+#      minutes a pre-push hook must never cost.
 #
 # Install it by pointing git at the directory (commit this, and have your
 # package manager's "prepare" script run it so every clone gets it):
@@ -68,16 +72,18 @@ if ! command -v "$PKG" >/dev/null 2>&1 || [ ! -d node_modules ]; then
 fi
 
 # Only run a script the project actually defines, so this hook is the same file
-# in a repo with three of these and a repo with one.
+# in a repo with five of these and a repo with one — a repo with no Cargo.toml
+# simply has no Rust scripts, and the loop never mentions them.
 has_script() {
   node -e "process.exit(require('./package.json').scripts && require('./package.json').scripts['$1'] ? 0 : 1)" 2>/dev/null
 }
 
 # Name only the checks that actually run: this hook is the same file in a repo
-# with three of these scripts and a repo with one, and a message listing checks
-# that never ran teaches the reader to distrust the message.
+# with five of these scripts and a repo with one, and a message listing checks
+# that never ran teaches the reader to distrust the message. JS first, Rust
+# last: clippy compiles, so the cheap checks get their say before it starts.
 GATE_SCRIPTS=""
-for script in format:check lint type-check; do
+for script in format:check lint type-check format:check:rust lint:rust; do
   has_script "$script" && GATE_SCRIPTS="${GATE_SCRIPTS:+$GATE_SCRIPTS, }$script"
 done
 
@@ -90,7 +96,7 @@ echo "pre-push: static gate ($GATE_SCRIPTS)..."
 # in that form `!` inverts only `a` and lets a red lint or type-check through.
 # The gate must fail if ANY check fails.
 run_gate() {
-  for script in format:check lint type-check; do
+  for script in format:check lint type-check format:check:rust lint:rust; do
     if has_script "$script"; then
       "$PKG" run "$script" || return 1
     fi
