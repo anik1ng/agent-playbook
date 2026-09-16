@@ -58,7 +58,7 @@ in this page — file it.
   pair only with a NARROW allowlist: both or neither.
 - **The local gate** (what CI will run anyway):
 
-      {{PKG_MANAGER}} run format:check && {{PKG_MANAGER}} run type-check && {{PKG_MANAGER}} run lint && {{PKG_MANAGER}} run knip && {{TEST_CMD}}
+      {{PKG_MANAGER}} run format:check && {{PKG_MANAGER}} run type-check && {{PKG_MANAGER}} run lint && {{PKG_MANAGER}} run knip && {{TEST_CMD}}{{RUST_GATE}}
 
 ## Worktrees (parallel tasks)
 
@@ -204,6 +204,7 @@ because neither half can do the other's job:
   commits gitleaks already scanned, and direct pushes are blocked by the pre-push hook.
 - Every job carries `timeout-minutes`. GitHub's default is 360 — one hung test would burn a
   large slice of a monthly quota in a single incident.
+{{RUST_RUNBOOK_BLOCK}}
 
 ## Merging (your ritual)
 

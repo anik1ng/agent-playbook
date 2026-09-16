@@ -55,8 +55,9 @@ Rules of engagement:
     read the test runner's config for the include pattern that makes a probe file
     visible (`include` in `vitest.config.ts`, in a vitest repo): a file outside it runs
     nothing, and the rename that follows is an `mv`.
-  - Never install anything — no `pnpm install`, `npm install`, `npm init`, no scratch
-    package: the launcher installs the PR head's dependencies before you start. A
+  - Never install anything — no `pnpm install`, `npm install`, `npm init`, no
+    `cargo install`, no scratch package: the launcher installs the PR head's
+    dependencies before you start. A
     module a probe cannot import is not a direct dependency of the repo (pnpm exposes
     no transitive package), so probe it through the module in the repo that wraps it,
     and never touch `node_modules` [seen live: a symlink planted there].
@@ -71,7 +72,11 @@ Rules of engagement:
     names, its test runner, and the targeted single-file form where the list carries
     one (`npx vitest run <file>` or `pnpm vitest run <file>` in a vitest repo). Bare
     `node`, or `npx` launching anything else, is an arbitrary-code runner the list
-    deliberately excludes.
+    deliberately excludes. A repo with a Rust half runs it the same way — the
+    `lint:rust` and `test:rust` scripts its gate line names, and
+    `<package manager> run test:rust -- <test name>` for one test — never bare
+    `cargo`, which is a runner and an installer in one binary (`cargo run`,
+    `cargo install`) and stays unseeded for the same reason `node` does.
   - A SHELL-script diff (a hook, a launcher) is the one case whose probe harness is
     itself a shell script. Write it at exactly `tmp/probe.sh` and run it as exactly
     `sh tmp/probe.sh` — that one literal command is seedable and seeded, the way
