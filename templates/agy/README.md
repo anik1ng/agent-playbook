@@ -169,8 +169,10 @@ used to prescribe `gh api … /rulesets`, and `gh api` is unseeded below on purp
 that one line stalled every review that reached it [seen live]), the gate commands from
 AGENTS.md and the repo's own test runner
 (`go test`, `pnpm test`, …) — including every per-language gate delegator the root
-manifest exposes (`npm run go:test`, `npm run go:vet`, …: a reviewer legitimately
-re-runs one half of a two-language gate, and the un-seeded half prompts [seen live]) —
+manifest exposes (`npm run go:test`, `npm run go:vet`, …, and the playbook's own Rust
+names where ADOPT.md rendered them: `format:check:rust`, `lint:rust`, `test:rust` — a
+reviewer legitimately re-runs one half of a two-language gate, and the un-seeded half
+prompts [seen live]) —
 and, where vitest is the runner, `npx vitest run` AND `pnpm vitest run`: the targeted
 single-file form the probe workflow needs, running the same committed test files
 `pnpm test` already runs, while the three-word prefix cannot launch any other package
@@ -198,7 +200,9 @@ a `git diff … > tmp/diff.patch`, which the guard then covered only for `gh`] �
 output directly), and a delete that lists files.
 Deliberately NOT: bare `git branch` (the prefix also
 matches `-D`), `git worktree` (…`remove`), `gh api` (POST hides behind the prefix),
-`node`, bare `npx` or any arbitrary-code runner; `export` (an env write rewrites what
+`node`, bare `npx`, bare `cargo` (`cargo run` and `cargo install` sit behind the same
+prefix as `cargo test`; the Rust gate reaches it through the package.json delegators
+above) or any arbitrary-code runner; `export` (an env write rewrites what
 every later seeded command means — a prepended `PATH` turns a seeded `git status` into
 any binary on disk, so the entry would silently widen every other rule in the list);
 `docker` (`run` starts a service and `-v` mounts any path on the machine — a reviewer

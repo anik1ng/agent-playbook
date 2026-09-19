@@ -1,0 +1,26 @@
+  # RustSec advisory check — templates/rust/security-job.yml in the playbook,
+  # rendered into security.yml's RUST_AUDIT_JOB_BLOCK placeholder line where
+  # the repo holds a Cargo.toml, deleted otherwise. It lives HERE and not in
+  # ci.yml for the same reason gitleaks does: an advisory is published against
+  # a crate the repo already holds, on a day no PR touched Cargo.lock — so it
+  # runs on every PR, doc-only ones included, and a red here is the quarantine
+  # working (docs/RUNBOOK.md "CI shape").
+  cargo-audit:
+    name: cargo audit (RustSec advisories)
+    runs-on: ubuntu-latest
+    # The advisory database clone plus one lockfile read — seconds.
+    timeout-minutes: 5
+    steps:
+      - uses: actions/checkout@v7
+      # A prebuilt, checksum-verified binary in seconds; `cargo install
+      # cargo-audit` would compile it for minutes on every run. The runner
+      # image ships cargo, which `cargo audit` needs only to be invoked
+      # through.
+      - uses: taiki-e/install-action@cargo-audit
+      # Through the repo's own script, like every gate command: the script
+      # carries `--file <cargo-dir>/Cargo.lock` where the crate is not at the
+      # root, and an `--ignore RUSTSEC-…` WITH its reason where one is ever
+      # needed — never an edit to this job. No install: the script needs the
+      # package manager to dispatch it and nothing from node_modules.
+      - run: corepack enable
+      - run: {{PKG_MANAGER}} run audit:rust

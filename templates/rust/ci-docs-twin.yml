@@ -1,0 +1,14 @@
+  # The no-op twin of ci.yml's Rust job — templates/rust/ci-docs-twin.yml in
+  # the playbook, rendered into ci-docs.yml's RUST_JOB_TWIN_BLOCK placeholder
+  # line wherever ci.yml carries that job, deleted otherwise. Invariant 2
+  # above applies to it exactly as to `checks`: a required check that never
+  # reports holds Merge forever, and doc-only PRs skip ci.yml entirely.
+  rust:
+    # Byte-identical to ci.yml's `rust` job name.
+    name: rust (format, clippy, test)
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    steps:
+      - run: |
+          echo "Doc-only change: the Rust job did not run, for the same reason"
+          echo "checks above did not. This run exists so its required check reports."
