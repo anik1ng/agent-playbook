@@ -31,9 +31,10 @@ Rules of engagement:
   An auto-launched reviewer's file grants end at its own worktree: one write outside it
   stalls the whole review on a permission prompt, with nobody guaranteed to be watching;
   the same path inside the tree costs nothing. Read command output directly instead of
-  saving it: `gh pr diff <pr> > tmp/diff.patch` stalls on a prompt however thoroughly
-  the allowlist is seeded — a redirect defeats the rule that covers the command — while
-  re-running `gh pr diff` costs nothing. When output truly must persist, write it from
+  saving it: `gh pr diff <pr> > tmp/diff.patch` (and `git diff <base>...HEAD >
+  tmp/diff.patch`, seen live) stalls on a prompt however thoroughly the allowlist is
+  seeded — a redirect defeats the rule that covers the command — while re-running the
+  command costs nothing. When output truly must persist, write it from
   your context with the file-editing tool.
 - The shell is allowlist-gated: every command outside the seeded shapes stalls the review
   on a permission prompt nobody is guaranteed to answer. Stay inside them — each rule
@@ -81,7 +82,13 @@ Rules of engagement:
     never hand-assemble an environment a suite reports missing. A suite that SKIPS
     locally without its infrastructure (a missing `TEST_DATABASE_URL`) skips by
     design: CI owns it — read that check's result on the PR instead of rebuilding
-    the environment locally.
+    the environment locally. That is the ONE substitution CI is allowed to make. A
+    gate you could not RUN — a runner the sandbox cannot see (`operation not
+    permitted: pnpm`, `which pnpm` finding nothing) — is not verified by a green
+    check: re-run it outside the sandbox (the allowlist admits the bypass for the
+    seeded runner commands), and if it still cannot run, say the gate was not run and
+    withhold the approve. An approve that leans on CI where the protocol asked for
+    execution is the failure this checklist exists to catch [seen live].
 - Read the full diff (`gh pr diff <pr>`), the PR body (`gh pr view <pr>`),
   and the issue it implements (`gh issue view <n>`).
 - If your CLI ships a generic diff-review command (Claude Code's `/code-review`), run it

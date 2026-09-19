@@ -8,9 +8,23 @@ re-read `--help` before rendering, headless flags churn.
 ## The `{{REVIEW_CMD}}` shape
 
     agy -i "$REVIEW_PROMPT" \
-      --model <the model the human chose> \
+      --model gemini-3.8-flash-high \
       --sandbox \
       --add-dir "$PWD"
+
+**The model is the playbook's current pick, and a sync carries it** (UPDATE.md's
+`auto-review.sh` paragraph): `gemini-3.8-flash-high`, chosen 2026-09-19 over
+`gemini-3.1-pro-high` on two replayed reviews with a known answer, in adopted repos
+[verified-by-execution]. On a head where Pro had found one real blocker by mutation,
+Flash found the same one by mutation and a SECOND real one Pro had missed (a helper
+whose only test was positive, so `() => true` passed the suite), ran the full gate
+including the archive smoke suite, and hallucinated nothing; on a head where Pro had
+raised a false blocker (it predicted parallel-test breakage without reading the runner
+config that disables parallelism), Flash approved and named two real minors Pro had
+missed. Its one downgrade: an untested `OR` branch Pro called a blocker, Flash a minor.
+Two runs is a small sample; the verdict comment names the model, so the record stays
+auditable and the line reverts in one edit. Re-measure the same way before changing
+it again — never on a vendor's benchmark table or a model's account of itself.
 
 The prompt is NOT written into this line: `auto-review.sh` exports `$REVIEW_PROMPT`,
 carrying the worktree's absolute path and the order to never leave it. That is what stops
@@ -81,7 +95,7 @@ pattern that names one of those characters is tested against the ESCAPED form, n
 shell string — the way to see the real payload is a hook that appends its stdin to a
 file inside the worktree.
 
-## Seeding agy's allowlist — TWO grant forms, not one
+## Seeding agy's allowlist — ONE grant form since agy 1.2.2
 
 `permissions.allow` lives in `~/.gemini/antigravity-cli/settings.json` — a per-MACHINE
 file: ask before writing it and leave a timestamped `.bak`.
@@ -120,20 +134,32 @@ per-worktree config (`core.fsmonitor false`), so no `error:` line tempts the rev
 into diagnostics.
 
 Rules are prefixes (`git` matches `git add`, not `github`), and agy 1.2.x also
-accepts `command(regex:…)` / `unsandboxed(regex:…)` — a regex rule can name an exact
-shape a prefix cannot, which is the only reason to reach for one; a regex that widens
-is `command(*)` in more characters. The list below stays enumerated prefixes. Rules
-come in two non-interchangeable forms:
+accepts `command(regex:…)` — a regex rule can name an exact shape a prefix cannot,
+which is the only reason to reach for one; a regex that widens is `command(*)` in more
+characters. The list below stays enumerated prefixes.
 
-| rule             | grants                         | the prompt it silences                        |
-| ---------------- | ------------------------------ | --------------------------------------------- |
-| `command(X)`     | running X at all               | "Do you want to proceed?"                     |
-| `unsandboxed(X)` | running X OUTSIDE the sandbox  | "Allow sandbox bypass for command execution?" |
+**There is ONE form, `command(X)`, and it covers both prompts** — "Do you want to
+proceed?" and "Allow sandbox bypass for command execution?". Until 1.2.1 those were two
+non-interchangeable rules, `command(X)` and `unsandboxed(X)`, and this section seeded
+both; agy 1.2.2 dropped the second form with no documentation and a startup warning
+("Invalid `unsandboxed` permission rules found; they are ignored and grant nothing …
+replace `unsandboxed` with `command`"). Verified on 1.2.7 [verified-by-execution]: a
+`gh pr view` that ran with the sandbox bypass was admitted by `command(gh pr view)`
+alone, no prompt, with every `unsandboxed(…)` entry deleted. **A file seeded under the
+old rule migrates by deletion**: every `unsandboxed(X)` has a `command(X)` twin, so
+drop the `unsandboxed(` entries from `allow` AND `deny` (the deny trio has its
+`command(…)` twins too) and keep the `.bak`; an entry with no twin is renamed, not
+dropped. Leaving them in costs nothing but the warning, since they grant nothing.
 
-Anything touching the network or disk beyond the worktree — every `gh`, every
-package-manager command, `git fetch`, a notify CLI — needs `unsandboxed(…)` TOO. Seeding
-only `command(…)` looks fine on a local probe and floods the human on the first real
-review. Seed both forms for the shapes a review needs (read-heavy, plus the few local
+The sandbox is still the boundary, only the grant changed. Anything touching the
+network or disk beyond the worktree — every `gh`, every package-manager command,
+`git fetch`, a notify CLI — runs OUTSIDE the sandbox, with the bypass, and the
+reviewer has to ask for the bypass itself: the sandbox has no network, and on a
+machine whose Node is version-managed (fnm's multishell directory, a `~/Library/pnpm`
+home) it has no test runner either — inside it `pnpm` answers
+`operation not permitted` and `which pnpm` finds nothing [seen live]. A reviewer that
+meets that and falls back to "CI is green" has not run the gate; the review skill says
+so in as many words now. Seed the shapes a review needs (read-heavy, plus the few local
 writes the protocol itself orders — verified against a live review, agy 1.1.20):
 `git status|diff|log|show|rev-parse|rev-list|merge-base|ls-files|blame`,
 `git branch --list`, `git worktree list`, `git checkout` (reverting mutations),
@@ -167,7 +193,8 @@ artifacts, seed what handling them takes: `mkdir`, `touch`, and the exact
 `rm -rf <artifact-dir>` the cleanup uses (`rm -rf .next`, …). Three shapes NO rule can
 cover, so the protocol avoids them: a multi-line command (each heredoc line is checked
 as a command of its own — write files with the editing tool), an output redirect
-(`cmd > file` defeats the rule that covers `cmd` [seen live, three commands] — read
+(`cmd > file` defeats the rule that covers `cmd` [seen live, four commands — the fourth
+a `git diff … > tmp/diff.patch`, which the guard then covered only for `gh`] — read
 output directly), and a delete that lists files.
 Deliberately NOT: bare `git branch` (the prefix also
 matches `-D`), `git worktree` (…`remove`), `gh api` (POST hides behind the prefix),

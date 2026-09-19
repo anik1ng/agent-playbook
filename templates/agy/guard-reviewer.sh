@@ -189,8 +189,12 @@ if hit "${A}npx[[:space:]]" && ! hit "${A}npx[[:space:]]+vitest[[:space:]]+run";
   deny "Off-protocol: bare npx is an arbitrary-code runner. Use the repo's own scripts; the one seeded npx form is 'npx vitest run <file>' (review SKILL.md, command discipline)."
 fi
 
-# gh output redirected to a file: a redirect defeats allowlist matching.
-if hit "${A}gh[[:space:]][^|;&<>]*>{1,2}[[:space:]]*[A-Za-z0-9_./~-]"; then
+# Output redirected to a file: a redirect defeats allowlist matching. Named
+# commands rather than any command, so `grep "a > b" src` — a search for a
+# comparison — stays an ordinary read. This rule named `gh` alone for weeks,
+# and the reviewer's next redirect was `git diff … > tmp/diff.patch` (live:
+# a headless run died on it, an interactive one would have prompted).
+if hit "${A}(gh|git|pnpm|npm|npx|yarn|go|cargo)[[:space:]][^|;&<>]*>{1,2}[[:space:]]*[A-Za-z0-9_./~-]"; then
   deny "Off-protocol: never redirect output to a file - a redirect defeats the allowlist rule that covers the command. Re-run without '> file' and read the output directly (review SKILL.md, command discipline)."
 fi
 
