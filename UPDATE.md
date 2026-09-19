@@ -87,24 +87,30 @@ Compare byte-for-byte; a
 difference is drift to sync — EXCEPT these declared local parts, which always survive:
 
 - `auto-review.sh` — the rendered `REVIEW_CMD` line (this repo's reviewer command). The
-  LOCAL part is WHICH CLI and WHICH MODEL; the line's SHAPE is the playbook's, and a sync
-  repairs it. Check it against the reviewer's page (`templates/agy/README.md` for agy,
-  the equivalent section of `ADOPT.md` for anything else) and fix, in the sync PR, any of:
+  LOCAL part is WHICH CLI; the line's SHAPE is the playbook's, and a sync repairs it — and
+  so is the MODEL where the CLI is agy: `templates/agy/README.md` records the current
+  pick with the measurement behind it, and a sync is how a re-measured pick reaches every
+  repo (it is a `--model` value, reverted in one edit; the verdict comment names the
+  model, so the history stays auditable either way). Check it against the reviewer's
+  page (`templates/agy/README.md` for agy, the equivalent section of `ADOPT.md` for
+  anything else) and fix, in the sync PR, any of:
 
   - the prompt is inline instead of `"$REVIEW_PROMPT"` (the script exports it and it pins
     the worktree path);
   - the reviewer's own directory is not named as an allowed one (`--add-dir "$PWD"` for
     agy) — without it every read inside the review worktree asks;
   - the model is implicit — a default that flips to the author's family silently breaks
-    cross-family review;
+    cross-family review — or, with agy, is not the pick `templates/agy/README.md`
+    currently names: set it, and say in the PR body which model the repo reviewed with
+    until now;
   - the run is opened with a blanket permission bypass instead of the CLI's scoping flag.
 
-  Anything else about the line — the CLI, the model name, extra local flags — is the
-  repo's and survives untouched. This paragraph used to say the flags survive too, and
-  that is exactly how a fix could not travel: `--add-dir` was added to the reviewer's page
-  the same day an adopted repo synced, its sync PR rewrote the prompt inside that very line, and
-  the rule forbade touching the flags beside it. A repaired shape is reported in the PR
-  body like any other change.
+  Anything else about the line — the CLI, the model name under a CLI other than agy,
+  extra local flags — is the repo's and survives untouched. This paragraph used to say
+  the flags survive too, and that is exactly how a fix could not travel: `--add-dir` was
+  added to the reviewer's page the same day an adopted repo synced, its sync PR rewrote
+  the prompt inside that very line, and the rule forbade touching the flags beside it.
+  A repaired shape is reported in the PR body like any other change.
 - `security.yml` — the header line recording this repo's one-time secret-sweep date.
   Where no date is recorded, the sweep has not happened — or was never written down,
   which reads the same a year later: OFFER to run it now (gitleaks over the full

@@ -252,8 +252,9 @@ session on a visible cmux terminal, so it may be interactive.
 Permissions — **enumerate what the protocol needs, plus a narrow deny**: list the tool
 shapes a review actually uses (probe tests, mutation runs, the local gate, read-only
 `git` and `gh`) in the CLI's permission config, and machine-deny `git push`,
-`gh pr merge`, `gh pr close` in EVERY form the config distinguishes (sandboxed and
-unsandboxed variants are separate rules in some CLIs).
+`gh pr merge`, `gh pr close` in EVERY form the config distinguishes (some CLIs keep
+sandboxed and unsandboxed variants as separate rules; agy did until 1.2.2 and no longer
+does — `templates/agy/README.md` has the one-form rule and the migration).
 
 **Never a wildcard allow.** "Grant broadly" is not "grant everything": a `*` rule makes
 the deny list the ONLY boundary, and a prefix deny list is three command shapes — it does
@@ -273,7 +274,7 @@ never be given the layer later (`UPDATE.md` will not back-fill a hook file the r
 not have).
 
 **For agy this is all written out** — the ready-made hook guard, the `{{REVIEW_CMD}}`
-shape, and the allowlist seeding (two grant forms, not one) — in `templates/agy/README.md`;
+shape, and the allowlist seeding (one grant form since agy 1.2.2) — in `templates/agy/README.md`;
 copy its shape when rendering for another CLI.
 
 **Prove the render by RUNNING it**, and report both probes in the summary as
