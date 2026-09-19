@@ -189,6 +189,15 @@ if hit "${A}npx[[:space:]]" && ! hit "${A}npx[[:space:]]+vitest[[:space:]]+run";
   deny "Off-protocol: bare npx is an arbitrary-code runner. Use the repo's own scripts; the one seeded npx form is 'npx vitest run <file>' (review SKILL.md, command discipline)."
 fi
 
+# Bare cargo: a runner and an installer in one binary (`cargo run`, `cargo
+# install`) behind the same prefix as `cargo test`, so no allowlist entry can
+# cover the test form alone — the Rust half of a gate is reached through the
+# package.json delegators (`<pkg> run lint:rust`, `<pkg> run test:rust -- <name>`),
+# which the review skill orders and the agy README seeds.
+if hit "${A}cargo([[:space:]]|$|[\"'])"; then
+  deny "Off-protocol: bare cargo is unseedable (cargo run and cargo install sit behind the same prefix as cargo test). Run the Rust half through the repo's own scripts: '<pkg> run format:check:rust', 'lint:rust', 'test:rust -- <test name>', 'audit:rust' (review SKILL.md, command discipline)."
+fi
+
 # Output redirected to a file: a redirect defeats allowlist matching. Named
 # commands rather than any command, so `grep "a > b" src` — a search for a
 # comparison — stays an ordinary read. This rule named `gh` alone for weeks,

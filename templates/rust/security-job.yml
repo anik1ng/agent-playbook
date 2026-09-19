@@ -20,7 +20,16 @@
       # Through the repo's own script, like every gate command: the script
       # carries `--file <cargo-dir>/Cargo.lock` where the crate is not at the
       # root, and an `--ignore RUSTSEC-…` WITH its reason where one is ever
-      # needed — never an edit to this job. No install: the script needs the
-      # package manager to dispatch it and nothing from node_modules.
+      # needed — never an edit to this job. The script needs nothing from
+      # node_modules, but the install is not optional under pnpm: pnpm 10+
+      # verifies the tree before ANY `pnpm run` and installs on its own when
+      # it is missing (`verifyDepsBeforeRun`, default `install`), so a job
+      # that "skips" the install pays for an uncached one instead. Explicit
+      # and cached is cheaper and predictable, and the same shape ci.yml uses.
       - run: corepack enable
+      - uses: actions/setup-node@v7
+        with:
+          node-version-file: .nvmrc
+          cache: {{PKG_MANAGER}}
+      - run: {{INSTALL_CMD}}
       - run: {{PKG_MANAGER}} run audit:rust
